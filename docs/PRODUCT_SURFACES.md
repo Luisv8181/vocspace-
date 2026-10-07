@@ -30,6 +30,18 @@ Prepare an accommodation request, implementation request, or stakeholder communi
 
 Turn the selected intervention into implementation artifacts for humans and coding agents.
 
+## 8. Accommodation Foundry
+
+Design, simulate, prototype, and validate physical, digital, and hybrid accommodations.
+
+Potential workflow:
+
+**Need → Design → Simulate → Build → Test → Adapt**
+
+The Foundry can connect accessibility reasoning to CAD/3D design, physics simulation, rapid prototyping, sensors, computer vision, robotics, and generated implementation artifacts.
+
+The Foundry must distinguish concepts, simulations, prototypes, tested prototypes, validated interventions, and production-ready artifacts.
+
 ## 8. Outcome Tracker
 
 Evaluate whether the solution worked.
