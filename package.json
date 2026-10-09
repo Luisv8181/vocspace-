@@ -1,10 +1,11 @@
 {
   "name": "vocspace-v0.1-foundation",
   "private": true,
-  "version": "0.1.0",
-  "description": "Synthetic-case domain model and prototype scaffolding for VocSpace.",
+  "version": "0.2.0",
+  "description": "Synthetic-case prototype, accommodation pattern library, and transparent matching engine for VocSpace.",
   "type": "module",
   "scripts": {
-    "validate": "node scripts/validate-domain.mjs"
+    "validate": "node scripts/validate-domain.mjs",
+    "test:matching": "node scripts/validate-matching.mjs"
   }
 }
