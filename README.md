@@ -47,3 +47,7 @@ Early architecture and discovery. The first implementation will use synthetic/de
 - Privacy by design
 - Accessibility by default
 - Learn from outcomes, not just recommendations
+
+## Transparent solution matching
+
+The prototype includes a deterministic, inspectable baseline matcher. It uses lexical/context overlap to rank draft accommodation patterns, returns explanations and matched terms, and routes patterns to resource categories. It is a prototype heuristic, not a validated recommendation model. Review [Solution Matching](docs/SOLUTION-MATCHING.md). Run `npm run validate`.
