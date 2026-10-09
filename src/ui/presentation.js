@@ -26,10 +26,13 @@ export function renderOptions(options = []) {
   `).join("");
 }
 
-export function renderMatchedPatterns(matches = [], resources = []) {
+export function renderMatchedPatterns(matches = [], resources = [], sources = []) {
   return matches.map(({ pattern, confidence, reasons, matchedTerms }) => {
     const routed = routeResources(pattern, resources);
     const sourceLabel = (pattern.provenance?.classes || []).map((item) => item.replaceAll("-", " ")).join(", ");
+    const linkedSources = (pattern.provenance?.sourceIds || [])
+      .map((sourceId) => sources.find((source) => source.id === sourceId))
+      .filter(Boolean);
     return `
       <article class="solution-card match-card">
         <p class="eyebrow">${escapeHtml(pattern.id)} · ${escapeHtml(confidence)}</p>
@@ -40,6 +43,8 @@ export function renderMatchedPatterns(matches = [], resources = []) {
         <p><strong>Matched terms:</strong> ${escapeHtml(matchedTerms.join(", ") || "No direct term overlap")}</p>
         <p><strong>Tradeoffs:</strong> ${escapeHtml(pattern.tradeoffs.join("; "))}</p>
         <p><strong>Provenance:</strong> ${escapeHtml(sourceLabel || "unknown")} · <strong>Status:</strong> ${escapeHtml(pattern.reviewStatus)}</p>
+        <p><strong>Source discovery links:</strong> ${linkedSources.length ? linkedSources.map((source) => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a>`).join("; ") : "No source mapped"}.</p>
+        <p><strong>Source limitations:</strong> ${escapeHtml(linkedSources.map((source) => source.limitations.join("; ")).join(" | ") || "No source mapping is currently attached.")}</p>
         <p><strong>Validation ideas:</strong> ${escapeHtml(pattern.validationIdeas.join("; "))}</p>
         <p><strong>Resource pathways:</strong> ${escapeHtml(routed.map((resource) => resource.name).join(", ") || "Needs resource review")}</p>
         <label class="select-option">
