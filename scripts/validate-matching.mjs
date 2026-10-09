@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { syntheticCases } from "../src/data/synthetic-cases.js";
 import { accommodationPatterns } from "../src/data/accommodation-patterns.js";
 import { resourceCategories } from "../src/data/resources.js";
-import { matchAccommodationPatterns, routeResources } from "../src/domain/solution-matcher.js";
+import { matchAccommodationPatterns, routeResources, hasSufficientContext } from "../src/domain/solution-matcher.js";
 import { createActionPlan } from "../src/domain/action-plan.js";
 
 test("synthetic cognitive-load case ranks information reduction first", () => {
@@ -64,4 +64,34 @@ test("custom barrier with grip-related need ranks grip pattern first", () => {
     constraints: ["low-cost"]
   };
   assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-004");
+});
+
+
+test("under-specified input requests more context instead of ranking", () => {
+  const model = { functionalNeed: "", barrier: "", task: "", context: "", constraints: [] };
+  assert.equal(hasSufficientContext(model), false);
+  assert.deepEqual(matchAccommodationPatterns(model, accommodationPatterns), []);
+});
+
+test("unrelated input produces no misleading ranked result", () => {
+  const model = {
+    functionalNeed: "I want to learn astronomy",
+    barrier: "I cannot find a constellation chart for a hobby project",
+    task: "Read about stars at home",
+    context: "personal hobby",
+    constraints: []
+  };
+  const ranked = matchAccommodationPatterns(model, accommodationPatterns);
+  assert.ok(ranked.length === 0 || ranked.every((match) => match.hasMeaningfulMatch));
+});
+
+test("task resumption matches interruptions and next-action language", () => {
+  const model = {
+    functionalNeed: "Help me resume my task after interruptions",
+    barrier: "I lose my place and forget the next action",
+    task: "Return to multi-step documentation work",
+    context: "office work",
+    constraints: []
+  };
+  assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-002");
 });
