@@ -1,9 +1,10 @@
 import { syntheticCases } from "../data/synthetic-cases.js";
 import { accommodationPatterns } from "../data/accommodation-patterns.js";
 import { resourceCategories } from "../data/resources.js";
+import { sourceCatalog } from "../data/source-catalog.js";
 import { createActionPlan } from "../domain/action-plan.js";
 import { matchAccommodationPatterns, hasSufficientContext } from "../domain/solution-matcher.js";
-import { escapeHtml, renderOptions, renderResourceOptions, renderMatchedPatterns } from "./presentation.js";
+import { escapeHtml, renderOptions, renderResourceOptions, renderMatchedPatterns, renderSourceCatalog } from "./presentation.js";
 
 const root = document.querySelector("#app");
 const solutionSection = (options) => `
@@ -92,6 +93,12 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       <h2 id="resource-title">4. Resource ecosystem</h2>
       <p>Resources are categorized by capabilities. Verified links and source records are a follow-up requirement before production launch.</p>
       <ul class="resource-list">${renderResourceOptions(resourceCategories)}</ul>
+    </section>
+
+    <section class="panel" aria-labelledby="source-title">
+      <h2 id="source-title">5. Source catalog</h2>
+      <p>These external source links can inform future research and pattern review. Their presence does not mean the associated pattern has been validated. Follow the source's terms and review it directly.</p>
+      <ul class="source-list">${renderSourceCatalog(sourceCatalog)}</ul>
     </section>
 
     <footer><p>VocSpace explores accessibility and vocational innovation. This prototype runs without a backend and uses synthetic examples by default.</p></footer>
