@@ -67,8 +67,9 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       <h2 id="solution-title">2. Compare solution pathways</h2>
       <p>Patterns are ranked using transparent keyword/context matching. These are candidate ideas, not probabilities or guaranteed recommendations.</p>
       <div id="matched-solutions" class="solution-grid"></div>
-      <h3>Existing case options</h3>
-      <p>These are case-specific illustrative options, separate from pattern matching. For a custom barrier, use the ranked patterns below and do not assume these options apply.</p>
+      <h3 id="case-options-heading">Existing case options</h3>
+      <p id="case-options-description">These are case-specific illustrative options, separate from pattern matching. For a custom barrier, use the ranked patterns below and do not assume these options apply.</p>
+      <p id="custom-options-note" hidden>Custom barrier mode: preset case options are hidden because they have not been tailored to this model.</p>
       <div class="solution-grid" id="case-options">${renderOptions(item.solutions)}</div>
       <button id="build-plan" type="button">Build an action plan from selected options</button>
       <div id="action-plan" aria-live="polite"></div>
@@ -101,12 +102,13 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
   if (matchedRoot) matchedRoot.innerHTML = renderMatchedPatterns(initialMatches, resourceCategories);
 
   const caseOptionsRoot = document.querySelector("#case-options");
+  const caseOptionsHeading = document.querySelector("#case-options-heading");
+  const caseOptionsDescription = document.querySelector("#case-options-description");
+  const customOptionsNote = document.querySelector("#custom-options-note");
   if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
-  const caseOptionsHeading = document.querySelector("#case-options")?.previousElementSibling;
-  if (caseOptionsHeading) {
-    caseOptionsHeading.hidden = Boolean(customModel);
-    if (customModel) caseOptionsHeading.previousElementSibling.hidden = true;
-  }
+  if (caseOptionsHeading) caseOptionsHeading.hidden = Boolean(customModel);
+  if (caseOptionsDescription) caseOptionsDescription.hidden = Boolean(customModel);
+  if (customOptionsNote) customOptionsNote.hidden = !customModel;
 
   document.querySelector("#case-select")?.addEventListener("change", (event) => {
     if (event.target.value === "custom") renderCase(syntheticCases[0].id, {
@@ -147,12 +149,13 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
     if (matchesRoot) matchesRoot.innerHTML = renderMatchedPatterns(matchAccommodationPatterns(draft, accommodationPatterns, { limit: 5 }), resourceCategories);
     const caseOptionsRoot = document.querySelector("#case-options");
     if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
-    const caseOptionsHeading = document.querySelector("#case-options")?.previousElementSibling;
-    if (caseOptionsHeading) {
-      caseOptionsHeading.hidden = Boolean(customModel);
-      const caseOptionsDescription = caseOptionsHeading.previousElementSibling;
-      if (caseOptionsDescription) caseOptionsDescription.hidden = Boolean(customModel);
-    }
+    const caseOptionsHeading = document.querySelector("#case-options-heading");
+    const caseOptionsDescription = document.querySelector("#case-options-description");
+    const customOptionsNote = document.querySelector("#custom-options-note");
+    if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
+    if (caseOptionsHeading) caseOptionsHeading.hidden = Boolean(customModel);
+    if (caseOptionsDescription) caseOptionsDescription.hidden = Boolean(customModel);
+    if (customOptionsNote) customOptionsNote.hidden = !customModel;
 
   });
 
