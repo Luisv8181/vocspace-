@@ -9,7 +9,7 @@ for (const item of syntheticCases) {
   const result = validateBarrierCase(item);
   if (!result.valid) {
     failed = true;
-    console.error(`Invalid case ${item.id}: missing ${result.missing.join(", ")}`);
+    console.error(`Invalid case ${item.id}: ${result.missing.join(", ")}`);
   }
   if (!Array.isArray(item.solutions) || item.solutions.length < 2) {
     failed = true;
@@ -21,10 +21,9 @@ for (const pattern of accommodationPatterns) {
   const result = validateAccommodationPattern(pattern);
   if (!result.valid) {
     failed = true;
-    console.error(`Invalid pattern ${pattern.id}: missing ${result.missing.join(", ")}`);
+    console.error(`Invalid pattern ${pattern.id}: ${result.missing.join(", ")}`);
   }
 }
 
 if (failed) process.exit(1);
-
 console.log(`Validated ${syntheticCases.length} synthetic cases and ${accommodationPatterns.length} accommodation patterns.`);
