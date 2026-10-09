@@ -109,3 +109,12 @@ Measure:
 - Accessibility and usability of the interface
 
 Do not tune solely for clicks or acceptance. A plausible-sounding but unsuitable suggestion is a failure.
+
+
+## Input sufficiency and no-match behavior
+
+The matcher now requires a minimally described model: at least one of functional need or barrier should be meaningfully described, and at least one additional task/context field should be present. This is a lightweight completeness gate, not a clinical adequacy check.
+
+If the model is too sparse, the matcher returns no ranked patterns so the UI can ask for more context. If there is no direct rule/context signal, the matcher returns no results rather than filling the screen with unrelated patterns.
+
+These behaviors reduce one type of false confidence, but they do not establish matching quality. Continue to test common language, synonyms, negation, ambiguous descriptions, and domain mismatch.
