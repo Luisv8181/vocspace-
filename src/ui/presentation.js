@@ -59,3 +59,15 @@ export function renderResourceOptions(resources = []) {
     </li>
   `).join("");
 }
+
+export function renderSourceCatalog(sources = []) {
+  return sources.map((source) => `
+    <li>
+      <a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)} (opens source)</a>
+      <p><strong>Publisher:</strong> ${escapeHtml(source.publisher)} · <strong>Review:</strong> ${escapeHtml(source.reviewStatus)}</p>
+      <p><strong>May inform:</strong> ${escapeHtml(source.supports.join("; "))}</p>
+      <p><strong>Limitations:</strong> ${escapeHtml(source.limitations.join("; "))}</p>
+      <p class="muted">This is a source-discovery record, not a completed evidence review. Read the source directly before using it to support a specific claim.</p>
+    </li>
+  `).join("");
+}
