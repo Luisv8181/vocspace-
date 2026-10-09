@@ -56,3 +56,7 @@ textarea:focus-visible { outline: 3px solid #e9a900; outline-offset: 3px; }
 .match-card { border-color: #9bb4c2; }
 .muted { display: block; margin-top: .35rem; font-size: .9rem; color: #405463; }
 #matched-solutions { margin: 1rem 0 1.5rem; }
+
+.source-list li { margin: 1rem 0; padding-bottom: .75rem; border-bottom: 1px solid #e1e8ec; }
+.source-list a { color: #145d83; font-weight: 750; text-underline-offset: .2em; }
+.source-list a:focus-visible { outline: 3px solid #e9a900; outline-offset: 3px; }
