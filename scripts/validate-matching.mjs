@@ -76,13 +76,45 @@ test("under-specified input requests more context instead of ranking", () => {
 test("unrelated input produces no misleading ranked result", () => {
   const model = {
     functionalNeed: "I want to learn astronomy",
-    barrier: "I cannot find a constellation chart for a hobby project",
-    task: "Read about stars at home",
-    context: "personal hobby",
+    barrier: "My telescope manual is missing a page",
+    task: "Identify constellations for a hobby project",
+    context: "personal hobby at home",
     constraints: []
   };
   const ranked = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.ok(ranked.length === 0 || ranked.every((match) => match.hasMeaningfulMatch));
+  assert.deepEqual(ranked, []);
+});
+
+test("communication support ranks communication-access pattern first", () => {
+  const model = {
+    functionalNeed: "Support understanding and expression",
+    barrier: "Communication is difficult across language modes",
+    task: "Understand spoken instructions",
+    context: "service interaction",
+    constraints: []
+  };
+  assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-005");
+});
+
+test("a physical tool context does not rank digital patterns above grip support", () => {
+  const model = {
+    functionalNeed: "Reduce grip effort while using a tool",
+    barrier: "The tool handle is too narrow to hold comfortably",
+    task: "Hold and operate a hand tool",
+    context: "physical work task",
+    constraints: ["low cost"]
+  };
+  const ranked = matchAccommodationPatterns(model, accommodationPatterns);
+  assert.equal(ranked[0].pattern.id, "AP-004");
+  assert.ok(ranked[0].hasMeaningfulMatch);
+});
+
+test("pattern results do not claim source review for draft synthesis", () => {
+  const ranked = matchAccommodationPatterns(syntheticCases[0], accommodationPatterns);
+  assert.ok(ranked.every((result) =>
+    result.pattern.reviewStatus !== "draft" ||
+    result.pattern.provenance.classes.includes("vocspace-synthesis")
+  ));
 });
 
 test("task resumption matches interruptions and next-action language", () => {
