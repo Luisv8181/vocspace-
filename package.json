@@ -5,7 +5,7 @@
   "description": "Synthetic-case prototype, accommodation pattern library, and transparent matching engine for VocSpace.",
   "type": "module",
   "scripts": {
-    "validate": "node scripts/validate-domain.mjs",
+    "validate": "node scripts/check-syntax.mjs && node scripts/validate-domain.mjs",
     "test:matching": "node scripts/validate-matching.mjs"
   }
 }
