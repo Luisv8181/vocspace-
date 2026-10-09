@@ -2,6 +2,7 @@ import { syntheticCases } from "../src/data/synthetic-cases.js";
 import { accommodationPatterns } from "../src/data/accommodation-patterns.js";
 import { validateBarrierCase } from "../src/domain/barrier-case.js";
 import { validateAccommodationPattern } from "../src/domain/accommodation-pattern.js";
+import { spawnSync } from "node:child_process";
 
 let failed = false;
 
@@ -27,3 +28,6 @@ for (const pattern of accommodationPatterns) {
 
 if (failed) process.exit(1);
 console.log(`Validated ${syntheticCases.length} synthetic cases and ${accommodationPatterns.length} accommodation patterns.`);
+
+const testResult = spawnSync(process.execPath, ["scripts/validate-matching.mjs"], { stdio: "inherit" });
+if (testResult.status !== 0) process.exit(testResult.status || 1);
