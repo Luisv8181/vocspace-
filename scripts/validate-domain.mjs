@@ -1,11 +1,11 @@
-import { readFile } from "node:fs/promises";
-import { barrierCaseSchema, validateBarrierCase } from "../src/domain/barrier-case.js";
+import { syntheticCases } from "../src/data/synthetic-cases.js";
+import { accommodationPatterns } from "../src/data/accommodation-patterns.js";
+import { validateBarrierCase } from "../src/domain/barrier-case.js";
+import { validateAccommodationPattern } from "../src/domain/accommodation-pattern.js";
 
-const moduleSource = await import("../src/data/synthetic-cases.js?cachebust=" + Date.now());
-const cases = moduleSource.syntheticCases;
 let failed = false;
 
-for (const item of cases) {
+for (const item of syntheticCases) {
   const result = validateBarrierCase(item);
   if (!result.valid) {
     failed = true;
@@ -17,6 +17,14 @@ for (const item of cases) {
   }
 }
 
+for (const pattern of accommodationPatterns) {
+  const result = validateAccommodationPattern(pattern);
+  if (!result.valid) {
+    failed = true;
+    console.error(`Invalid pattern ${pattern.id}: missing ${result.missing.join(", ")}`);
+  }
+}
+
 if (failed) process.exit(1);
 
-console.log(`Validated ${cases.length} synthetic barrier cases.`);
+console.log(`Validated ${syntheticCases.length} synthetic cases and ${accommodationPatterns.length} accommodation patterns.`);
