@@ -68,8 +68,8 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       <p>Patterns are ranked using transparent keyword/context matching. These are candidate ideas, not probabilities or guaranteed recommendations.</p>
       <div id="matched-solutions" class="solution-grid"></div>
       <h3>Existing case options</h3>
-      <p>These are case examples and remain separate from pattern matching.</p>
-      <div class="solution-grid">${renderOptions(item.solutions)}</div>
+      <p>These are case-specific illustrative options, separate from pattern matching. For a custom barrier, use the ranked patterns below and do not assume these options apply.</p>
+      <div class="solution-grid" id="case-options">${renderOptions(item.solutions)}</div>
       <button id="build-plan" type="button">Build an action plan from selected options</button>
       <div id="action-plan" aria-live="polite"></div>
     </section>
@@ -99,6 +99,14 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
   const matchedRoot = document.querySelector("#matched-solutions");
   const initialMatches = matchAccommodationPatterns(model, accommodationPatterns, { limit: 5 });
   if (matchedRoot) matchedRoot.innerHTML = renderMatchedPatterns(initialMatches, resourceCategories);
+
+  const caseOptionsRoot = document.querySelector("#case-options");
+  if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
+  const caseOptionsHeading = document.querySelector("#case-options")?.previousElementSibling;
+  if (caseOptionsHeading) {
+    caseOptionsHeading.hidden = Boolean(customModel);
+    if (customModel) caseOptionsHeading.previousElementSibling.hidden = true;
+  }
 
   document.querySelector("#case-select")?.addEventListener("change", (event) => {
     if (event.target.value === "custom") renderCase(syntheticCases[0].id, {
@@ -144,7 +152,15 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
     const selectedIds = Array.from(document.querySelectorAll('input[name="selectedSolution"]:checked')).map((input) => input.value);
     const selectedCaseOptions = item.solutions.filter((solution) => selectedIds.includes(solution.id));
     const selectedPatternIds = Array.from(document.querySelectorAll('input[name="selectedPattern"]:checked')).map((input) => input.value);
-    const matchedSolutions = matchAccommodationPatterns(model, accommodationPatterns, { limit: 10 })
+    const latestModel = {
+      participationGoal: document.querySelector("#goal")?.value?.trim() || model.participationGoal,
+      task: document.querySelector("#task")?.value?.trim() || model.task,
+      context: document.querySelector("#context")?.value?.trim() || model.context,
+      barrier: document.querySelector("#barrier")?.value?.trim() || model.barrier,
+      functionalNeed: document.querySelector("#need")?.value?.trim() || model.functionalNeed,
+      constraints: (document.querySelector("#constraints")?.value || "").split(";").map((value) => value.trim()).filter(Boolean)
+    };
+    const matchedSolutions = matchAccommodationPatterns(latestModel, accommodationPatterns, { limit: 10 })
       .filter((match) => selectedPatternIds.includes(match.pattern.id))
       .map((match) => ({
         id: match.pattern.id,
@@ -153,10 +169,14 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
         rationale: match.reasons.join(" "),
         implementationDifficulty: "to be assessed",
         tradeoffs: match.pattern.tradeoffs,
-        implementationStep: `Review fit and constraints for ${match.pattern.title}, choose a feasible implementation, and agree on a test.`
+        implementationStep: `Review fit and constraints for ${match.pattern.title}, decide who needs to be involved, and agree on a test.`
       }));
     const selected = [...selectedCaseOptions, ...matchedSolutions];
-    const plan = createActionPlan(selected, { title: "Draft accommodation action plan", participationGoal: model.participationGoal, functionalNeed: model.functionalNeed });
+    const plan = createActionPlan(selected, {
+      title: "Draft accommodation action plan",
+      participationGoal: latestModel.participationGoal,
+      functionalNeed: latestModel.functionalNeed
+    });
     const planRoot = document.querySelector("#action-plan");
     if (!planRoot) return;
     if (!selected.length) {
