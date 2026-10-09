@@ -145,6 +145,14 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
     `;
     const matchesRoot = document.querySelector("#matched-solutions");
     if (matchesRoot) matchesRoot.innerHTML = renderMatchedPatterns(matchAccommodationPatterns(draft, accommodationPatterns, { limit: 5 }), resourceCategories);
+    const caseOptionsRoot = document.querySelector("#case-options");
+    if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
+    const caseOptionsHeading = document.querySelector("#case-options")?.previousElementSibling;
+    if (caseOptionsHeading) {
+      caseOptionsHeading.hidden = Boolean(customModel);
+      const caseOptionsDescription = caseOptionsHeading.previousElementSibling;
+      if (caseOptionsDescription) caseOptionsDescription.hidden = Boolean(customModel);
+    }
 
   });
 
