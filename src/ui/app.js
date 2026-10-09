@@ -2,7 +2,8 @@ import { syntheticCases } from "../data/synthetic-cases.js";
 import { accommodationPatterns } from "../data/accommodation-patterns.js";
 import { resourceCategories } from "../data/resources.js";
 import { createActionPlan } from "../domain/action-plan.js";
-import { escapeHtml, renderOptions, renderResourceOptions } from "./presentation.js";
+import { matchAccommodationPatterns } from "../domain/solution-matcher.js";
+import { escapeHtml, renderOptions, renderResourceOptions, renderMatchedPatterns } from "./presentation.js";
 
 const root = document.querySelector("#app");
 const solutionSection = (options) => `
@@ -62,7 +63,16 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       </div>
     </section>
 
-    ${solutionSection(item.solutions)}
+    <section class="panel" aria-labelledby="solution-title">
+      <h2 id="solution-title">2. Compare solution pathways</h2>
+      <p>Patterns are ranked using transparent keyword/context matching. These are candidate ideas, not probabilities or guaranteed recommendations.</p>
+      <div id="matched-solutions" class="solution-grid"></div>
+      <h3>Existing case options</h3>
+      <p>These are case examples and remain separate from pattern matching.</p>
+      <div class="solution-grid">${renderOptions(item.solutions)}</div>
+      <button id="build-plan" type="button">Build an action plan from selected options</button>
+      <div id="action-plan" aria-live="polite"></div>
+    </section>
 
     <section class="panel" aria-labelledby="pattern-title">
       <h2 id="pattern-title">3. Accommodation pattern library</h2>
@@ -85,6 +95,10 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
 
     <footer><p>VocSpace explores accessibility and vocational innovation. This prototype runs without a backend and uses synthetic examples by default.</p></footer>
   `;
+
+  const matchedRoot = document.querySelector("#matched-solutions");
+  const initialMatches = matchAccommodationPatterns(model, accommodationPatterns, { limit: 5 });
+  if (matchedRoot) matchedRoot.innerHTML = renderMatchedPatterns(initialMatches, resourceCategories);
 
   document.querySelector("#case-select")?.addEventListener("change", (event) => {
     if (event.target.value === "custom") renderCase(syntheticCases[0].id, {
@@ -119,26 +133,46 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
         <dt>Strengths</dt><dd>${escapeHtml(draft.strengths.join("; ") || "Not specified")}</dd>
         <dt>Constraints</dt><dd>${escapeHtml(draft.constraints.join("; ") || "Not specified")}</dd>
       </dl>
-      <p role="status">Functional model updated in this page. Candidate solutions remain illustrative examples; adapt them before use.</p>
+      <p role="status">Functional model updated in this page. Ranked patterns below are refreshed from your current task, context, barrier, and functional need.</p>
     `;
+    const matchesRoot = document.querySelector("#matched-solutions");
+    if (matchesRoot) matchesRoot.innerHTML = renderMatchedPatterns(matchAccommodationPatterns(draft, accommodationPatterns, { limit: 5 }), resourceCategories);
+
   });
 
   document.querySelector("#build-plan")?.addEventListener("click", () => {
     const selectedIds = Array.from(document.querySelectorAll('input[name="selectedSolution"]:checked')).map((input) => input.value);
-    const selected = item.solutions.filter((solution) => selectedIds.includes(solution.id));
-    const plan = createActionPlan(selected);
+    const selectedCaseOptions = item.solutions.filter((solution) => selectedIds.includes(solution.id));
+    const selectedPatternIds = Array.from(document.querySelectorAll('input[name="selectedPattern"]:checked')).map((input) => input.value);
+    const matchedSolutions = matchAccommodationPatterns(model, accommodationPatterns, { limit: 10 })
+      .filter((match) => selectedPatternIds.includes(match.pattern.id))
+      .map((match) => ({
+        id: match.pattern.id,
+        name: match.pattern.title,
+        patternId: match.pattern.id,
+        rationale: match.reasons.join(" "),
+        implementationDifficulty: "to be assessed",
+        tradeoffs: match.pattern.tradeoffs,
+        implementationStep: `Review fit and constraints for ${match.pattern.title}, choose a feasible implementation, and agree on a test.`
+      }));
+    const selected = [...selectedCaseOptions, ...matchedSolutions];
+    const plan = createActionPlan(selected, { title: "Draft accommodation action plan", participationGoal: model.participationGoal, functionalNeed: model.functionalNeed });
     const planRoot = document.querySelector("#action-plan");
     if (!planRoot) return;
     if (!selected.length) {
-      planRoot.innerHTML = "<p role=\"status\">Select one or more options to build a draft action plan.</p>";
+      planRoot.innerHTML = "<p role=\"status\">Select one or more case options or matched patterns to build a draft action plan.</p>";
       return;
     }
     planRoot.innerHTML = `
-      <h3>Draft action plan</h3>
-      <ol>${plan.implementationSteps.map((step) => `<li>${escapeHtml(step.step)}</li>`).join("")}</ol>
-      <p><strong>Validation question:</strong> ${escapeHtml(plan.validationQuestion)}</p>
-      <p><strong>Outcome to measure:</strong> ${escapeHtml(plan.outcomeMeasure)}</p>
-      <p>This plan is a starting point for discussion and testing, not a guarantee of effectiveness.</p>
+      <h3>${escapeHtml(plan.title)}</h3>
+      <p><strong>Participation goal:</strong> ${escapeHtml(plan.participationGoal)}</p>
+      <p><strong>Functional need:</strong> ${escapeHtml(plan.functionalNeed)}</p>
+      <ol>${plan.implementationSteps.map((step) => `<li>${escapeHtml(step.step)} <span class="muted">Owner: ${escapeHtml(step.owner)} · ${escapeHtml(step.status)}</span></li>`).join("")}</ol>
+      <h4>Validation</h4>
+      <p><strong>Question:</strong> ${escapeHtml(plan.validation.question)}</p>
+      <p><strong>Measures:</strong> ${escapeHtml(plan.validation.measures.join(", "))}</p>
+      <p><strong>Baseline:</strong> Record the starting condition before making the change.</p>
+      <ul>${plan.cautions.map((caution) => `<li>${escapeHtml(caution)}</li>`).join("")}</ul>
     `;
   });
 }
