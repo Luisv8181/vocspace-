@@ -56,3 +56,7 @@ The prototype includes a deterministic, inspectable baseline matcher. It uses le
 ## Agent handoff: solution matching
 
 The functional-model matcher and action-plan schema live in `src/domain/solution-matcher.js` and `src/domain/action-plan.js`. The baseline is a transparent heuristic, not a validated recommendation model. See `docs/SOLUTION-MATCHING.md`. Run `npm run validate`; CI checks schema integrity and matching scenarios. The next priority is evaluate relevance with reviewed examples and user input before adding generative AI or sensitive case management.
+
+## Source catalog
+
+The prototype includes a compact catalog of official JAN pages for discovery and future human review. Pattern-to-source mappings are provisional: patterns remain draft and have not been upgraded to evidence-validated status. See [Source Catalog and Pattern Mapping](docs/SOURCE-CATALOG-AND-PATTERN-MAPPING.md) and [Evidence and Source Provenance](docs/EVIDENCE-AND-SOURCE-PROVENANCE.md).
