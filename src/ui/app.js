@@ -100,9 +100,13 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
   const matchedRoot = document.querySelector("#matched-solutions");
   const initialMatches = matchAccommodationPatterns(model, accommodationPatterns, { limit: 5 });
   if (matchedRoot) {
-    matchedRoot.innerHTML = hasSufficientContext(model)
-      ? (initialMatches.length ? renderMatchedPatterns(initialMatches, resourceCategories) : '<p class="notice" role="status">No clear pattern match yet. Try adding task details, describing the barrier in different words, or review the pattern library manually.</p>')
-      : '<p class="notice" role="status">More context needed. Describe at least the functional need or barrier and one more detail about the task or environment.</p>';
+    if (!hasSufficientContext(model)) {
+      matchedRoot.innerHTML = '<p class="notice" role="status">More context needed. Describe the functional need or barrier and one more detail about the task or environment.</p>';
+    } else if (initialMatches.length) {
+      matchedRoot.innerHTML = renderMatchedPatterns(initialMatches, resourceCategories);
+    } else {
+      matchedRoot.innerHTML = '<p class="notice" role="status">No clear pattern match found. Add context, try different wording, or review the pattern library manually. Do not treat unrelated results as recommendations.</p>';
+    }
   }
 
   const caseOptionsRoot = document.querySelector("#case-options");
@@ -152,9 +156,13 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
     const matchesRoot = document.querySelector("#matched-solutions");
     const revisedMatches = matchAccommodationPatterns(draft, accommodationPatterns, { limit: 5 });
     if (matchesRoot) {
-      matchesRoot.innerHTML = hasSufficientContext(draft)
-        ? (revisedMatches.length ? renderMatchedPatterns(revisedMatches, resourceCategories) : '<p class="notice" role="status">No clear pattern match yet. Add more context or review the pattern library manually.</p>')
-        : '<p class="notice" role="status">More context needed. Describe the functional need or barrier and one more detail about the task or environment.</p>';
+      if (!hasSufficientContext(draft)) {
+        matchesRoot.innerHTML = '<p class="notice" role="status">More context needed. Describe the functional need or barrier and one more detail about the task or environment.</p>';
+      } else if (revisedMatches.length) {
+        matchesRoot.innerHTML = renderMatchedPatterns(revisedMatches, resourceCategories);
+      } else {
+        matchesRoot.innerHTML = '<p class="notice" role="status">No clear pattern match found. Add context, try different wording, or review the pattern library manually. Do not treat unrelated results as recommendations.</p>';
+      }
     }
     const caseOptionsRoot = document.querySelector("#case-options");
     if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
