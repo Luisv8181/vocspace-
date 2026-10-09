@@ -110,7 +110,7 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
     if (!hasSufficientContext(model)) {
       matchedRoot.innerHTML = '<p class="notice" role="status">More context needed. Describe the functional need or barrier and one more detail about the task or environment.</p>';
     } else if (initialMatches.length) {
-      matchedRoot.innerHTML = renderMatchedPatterns(initialMatches, resourceCategories);
+      matchedRoot.innerHTML = renderMatchedPatterns(initialMatches, resourceCategories, sourceCatalog);
     } else {
       matchedRoot.innerHTML = '<p class="notice" role="status">No clear pattern match found. Add context, try different wording, or review the pattern library manually. Do not treat unrelated results as recommendations.</p>';
     }
@@ -166,7 +166,7 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       if (!hasSufficientContext(draft)) {
         matchesRoot.innerHTML = '<p class="notice" role="status">More context needed. Describe the functional need or barrier and one more detail about the task or environment.</p>';
       } else if (revisedMatches.length) {
-        matchesRoot.innerHTML = renderMatchedPatterns(revisedMatches, resourceCategories);
+        matchesRoot.innerHTML = renderMatchedPatterns(revisedMatches, resourceCategories, sourceCatalog);
       } else {
         matchesRoot.innerHTML = '<p class="notice" role="status">No clear pattern match found. Add context, try different wording, or review the pattern library manually. Do not treat unrelated results as recommendations.</p>';
       }
