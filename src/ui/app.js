@@ -2,7 +2,7 @@ import { syntheticCases } from "../data/synthetic-cases.js";
 import { accommodationPatterns } from "../data/accommodation-patterns.js";
 import { resourceCategories } from "../data/resources.js";
 import { createActionPlan } from "../domain/action-plan.js";
-import { matchAccommodationPatterns } from "../domain/solution-matcher.js";
+import { matchAccommodationPatterns, hasSufficientContext } from "../domain/solution-matcher.js";
 import { escapeHtml, renderOptions, renderResourceOptions, renderMatchedPatterns } from "./presentation.js";
 
 const root = document.querySelector("#app");
@@ -99,7 +99,11 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
 
   const matchedRoot = document.querySelector("#matched-solutions");
   const initialMatches = matchAccommodationPatterns(model, accommodationPatterns, { limit: 5 });
-  if (matchedRoot) matchedRoot.innerHTML = renderMatchedPatterns(initialMatches, resourceCategories);
+  if (matchedRoot) {
+    matchedRoot.innerHTML = hasSufficientContext(model)
+      ? (initialMatches.length ? renderMatchedPatterns(initialMatches, resourceCategories) : '<p class="notice" role="status">No clear pattern match yet. Try adding task details, describing the barrier in different words, or review the pattern library manually.</p>')
+      : '<p class="notice" role="status">More context needed. Describe at least the functional need or barrier and one more detail about the task or environment.</p>';
+  }
 
   const caseOptionsRoot = document.querySelector("#case-options");
   const caseOptionsHeading = document.querySelector("#case-options-heading");
@@ -146,7 +150,12 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       <p role="status">Functional model updated in this page. Ranked patterns below are refreshed from your current task, context, barrier, and functional need.</p>
     `;
     const matchesRoot = document.querySelector("#matched-solutions");
-    if (matchesRoot) matchesRoot.innerHTML = renderMatchedPatterns(matchAccommodationPatterns(draft, accommodationPatterns, { limit: 5 }), resourceCategories);
+    const revisedMatches = matchAccommodationPatterns(draft, accommodationPatterns, { limit: 5 });
+    if (matchesRoot) {
+      matchesRoot.innerHTML = hasSufficientContext(draft)
+        ? (revisedMatches.length ? renderMatchedPatterns(revisedMatches, resourceCategories) : '<p class="notice" role="status">No clear pattern match yet. Add more context or review the pattern library manually.</p>')
+        : '<p class="notice" role="status">More context needed. Describe the functional need or barrier and one more detail about the task or environment.</p>';
+    }
     const caseOptionsRoot = document.querySelector("#case-options");
     if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
     const caseOptionsHeading = document.querySelector("#case-options-heading");
