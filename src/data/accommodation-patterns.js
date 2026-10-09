@@ -57,7 +57,7 @@ export const accommodationPatterns = [
     candidateApproaches: ["written-and-spoken-options", "captions-or-transcript", "plain-language-summary", "language-choice", "confirmation-of-key-information", "alternative-communication"],
     tradeoffs: ["automated-translation-can-lose-nuance", "captured-content-may-create-privacy-risk"],
     validationIdeas: ["user-confirmed-understanding", "correction-burden", "interaction-goal-achieved"],
-    provenance: { classes: ["vocspace-synthesis"], sourceIds: [], notes: "Original VocSpace synthesis; context-specific review required." },
+    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["JAN-COMMUNICATION-PROCESS", "JAN-EFFECTIVE-COMMUNICATION"], notes: "Original VocSpace synthesis; context-specific review required before deployment." },
     reviewStatus: "draft"
   }
 ];
