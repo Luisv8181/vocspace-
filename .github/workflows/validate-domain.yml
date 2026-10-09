@@ -16,5 +16,5 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Validate synthetic cases, patterns, and matching
+      - name: Check JavaScript syntax, domain schemas, source records, and matching
         run: npm run validate
