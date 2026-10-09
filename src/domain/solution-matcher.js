@@ -31,6 +31,13 @@ function overlapScore(text, tokens) {
   return hits;
 }
 
+export function hasSufficientContext(model) {
+  const fields = ["functionalNeed", "barrier", "task", "context"];
+  const populated = fields.filter((field) => String(model?.[field] || "").trim().length >= 8);
+  const hasCore = ["functionalNeed", "barrier"].some((field) => String(model?.[field] || "").trim().length >= 8);
+  return hasCore && populated.length >= 2;
+}
+
 function inferContexts(model) {
   const context = normalizedText(model.context);
   const task = normalizedText(model.task);
@@ -50,6 +57,7 @@ function inferContexts(model) {
  */
 export function matchAccommodationPatterns(model, patterns, options = {}) {
   const limit = Math.max(1, Math.min(Number(options.limit) || 5, 10));
+  if (!model || !hasSufficientContext(model)) return [];
   const query = [
     model.functionalNeed,
     model.barrier,
@@ -70,7 +78,12 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
       ...(pattern.candidateApproaches || []),
       ...(pattern.contexts || [])
     ].join(" ");
-    const supporting = queryTokens.filter((token) => normalizedText(approachText).includes(token)).length;
+    const ignoredTokens = new Set(["task", "work", "help", "need", "make", "difficult", "support", "person", "thing", "something", "unable"]);
+    const meaningfulTokens = [...new Set(queryTokens)].filter((token) => token.length >= 4 && !ignoredTokens.has(token));
+    const patternTokens = tokenize(approachText);
+    const supporting = meaningfulTokens.filter((token) =>
+      patternTokens.some((candidate) => candidate === token || candidate.startsWith(token) || token.startsWith(candidate))
+    ).length;
     const contextMatches = inferredContexts.filter((context) =>
       (pattern.contexts || []).some((entry) => {
         const p = normalizedText(entry);
@@ -78,23 +91,27 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
       })
     ).length;
     const score = primary * 3 + needsScore * 4 + Math.min(supporting, 6) + contextMatches * 2;
+    const hasMeaningfulMatch = primary > 0 || needsScore > 0 || contextMatches > 0;
     const reasons = [];
     if (needsScore > 0) reasons.push("The functional-need description overlaps with this pattern's focus.");
     if (primary > 0) reasons.push("The task, barrier, or context contains terms associated with this pattern.");
     if (contextMatches > 0) reasons.push("The inferred context overlaps with the pattern's documented contexts.");
-    if (reasons.length === 0) reasons.push("This pattern is included as a lower-confidence alternative to consider.");
+    if (reasons.length === 0) reasons.push("No direct matching signal was found. Consider clarifying the barrier or reviewing this pattern manually.");
     const confidence = score >= 12 ? "strong lexical match" : score >= 5 ? "possible match" : "exploratory alternative";
     return {
       pattern,
       score,
-      confidence,
+      confidence: hasMeaningfulMatch ? confidence : "exploratory alternative",
+      hasMeaningfulMatch,
       reasons,
       contextMatches,
       matchedTerms: rule.tokens.filter((token) => normalizedText(query).includes(token))
     };
   }).sort((a, b) => b.score - a.score || a.pattern.id.localeCompare(b.pattern.id));
 
-  return ranked.slice(0, limit);
+  const relevant = ranked.filter((item) => item.hasMeaningfulMatch);
+  if (relevant.length === 0) return [];
+  return relevant.slice(0, limit);
 }
 
 export function routeResources(pattern, resources) {
