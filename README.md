@@ -51,3 +51,8 @@ Early architecture and discovery. The first implementation will use synthetic/de
 ## Transparent solution matching
 
 The prototype includes a deterministic, inspectable baseline matcher. It uses lexical/context overlap to rank draft accommodation patterns, returns explanations and matched terms, and routes patterns to resource categories. It is a prototype heuristic, not a validated recommendation model. Review [Solution Matching](docs/SOLUTION-MATCHING.md). Run `npm run validate`.
+
+
+## Agent handoff: solution matching
+
+The functional-model matcher and action-plan schema live in `src/domain/solution-matcher.js` and `src/domain/action-plan.js`. The baseline is a transparent heuristic, not a validated recommendation model. See `docs/SOLUTION-MATCHING.md`. Run `npm run validate`; CI checks schema integrity and matching scenarios. The next priority is evaluate relevance with reviewed examples and user input before adding generative AI or sensitive case management.
