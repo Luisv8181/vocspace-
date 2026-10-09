@@ -1,0 +1,47 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #182431;
+  background: #f5f7f8;
+  line-height: 1.6;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; padding: 2rem 0 4rem; }
+h1, h2, h3 { line-height: 1.2; }
+h1 { font-size: clamp(2.2rem, 5vw, 4rem); max-width: 17ch; margin: .2rem 0 1rem; }
+h2 { font-size: clamp(1.35rem, 3vw, 2rem); }
+p { max-width: 75ch; }
+.hero { padding: clamp(1.5rem, 5vw, 3.5rem); border-radius: 1.5rem; background: #102d42; color: #fff; }
+.hero p { font-size: 1.05rem; }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .8rem; font-weight: 800; }
+.notice { padding: 1rem; border-left: .3rem solid #eabf5a; background: #fff5d8; color: #302916; border-radius: .35rem; }
+.panel { margin-top: 1.25rem; padding: clamp(1.2rem, 3vw, 2rem); border: 1px solid #d5dfe5; background: #fff; border-radius: 1rem; }
+label { display: block; font-weight: 700; margin: .75rem 0 .35rem; }
+select, button { font: inherit; }
+select { max-width: 100%; min-height: 2.75rem; width: min(100%, 40rem); padding: .6rem; border: 1px solid #8094a0; border-radius: .5rem; background: #fff; color: inherit; }
+button { min-height: 2.8rem; margin-top: 1rem; padding: .7rem 1rem; border: 0; border-radius: .5rem; background: #145d83; color: #fff; font-weight: 750; cursor: pointer; }
+button:hover { background: #0d4564; }
+:focus-visible { outline: 3px solid #e9a900; outline-offset: 3px; }
+.functional-model { display: grid; grid-template-columns: minmax(9rem, .35fr) 1fr; gap: .4rem 1rem; }
+dt { font-weight: 800; }
+dd { margin: 0; padding-bottom: .6rem; border-bottom: 1px solid #e7ecef; }
+.solution-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; margin-top: 1rem; }
+.solution-card { padding: 1rem; border: 1px solid #d5dfe5; border-radius: .75rem; background: #fbfcfd; }
+.solution-card h3 { margin-top: .3rem; }
+.solution-card .eyebrow { color: #34596d; }
+.select-option { display: flex; align-items: flex-start; gap: .6rem; }
+.select-option input { min-width: 1.2rem; min-height: 1.2rem; margin-top: .25rem; }
+.pattern-list, .resource-list { padding-left: 1.25rem; }
+.pattern-list li, .resource-list li { margin: .75rem 0; padding-left: .25rem; }
+footer { margin-top: 2rem; color: #405463; font-size: .95rem; }
+@media (max-width: 600px) {
+  main { width: min(100% - 1rem, 1120px); padding-top: .5rem; }
+  .functional-model { grid-template-columns: 1fr; gap: .15rem; }
+  dt { margin-top: .6rem; }
+  dd { padding-bottom: .6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
