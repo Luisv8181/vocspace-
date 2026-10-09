@@ -127,3 +127,66 @@ test("task resumption matches interruptions and next-action language", () => {
   };
   assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-002");
 });
+
+
+const regressionScenarios = [
+  {
+    name: "visual clutter and notifications",
+    model: { functionalNeed: "Reduce visual clutter and maintain focus", barrier: "Notifications compete with task attention", task: "Complete office documentation", context: "busy office", constraints: [] },
+    expected: "AP-001"
+  },
+  {
+    name: "task resumption after interruptions",
+    model: { functionalNeed: "Resume the right step and remember the next action after interruptions", barrier: "Loses place during multi-step work", task: "Return to documentation", context: "office work", constraints: [] },
+    expected: "AP-002"
+  },
+  {
+    name: "online form navigation",
+    model: { functionalNeed: "Maintain navigation through an online form", barrier: "Loses location and progress in a portal", task: "Complete public service application", context: "website", constraints: [] },
+    expected: "AP-003"
+  },
+  {
+    name: "grip force on a hand tool",
+    model: { functionalNeed: "Reduce grip force while holding a tool", barrier: "Handle is difficult to grasp", task: "Operate hand tool", context: "physical work task", constraints: [] },
+    expected: "AP-004"
+  },
+  {
+    name: "captions and language access",
+    model: { functionalNeed: "Understand instructions using captions and translated text", barrier: "Spoken information is difficult to understand", task: "Communicate during service interaction", context: "service setting", constraints: [] },
+    expected: "AP-005"
+  },
+  {
+    name: "office attention without private office",
+    model: { functionalNeed: "Reduce competing visual and auditory stimuli", barrier: "Open office distractions interrupt attention", task: "Sustain focus while writing", context: "workplace", constraints: [] },
+    expected: "AP-001"
+  },
+  {
+    name: "keep place in multi-step portal",
+    model: { functionalNeed: "Maintain orientation and next steps", barrier: "Loses place while navigating an online form", task: "Submit a portal application", context: "public website", constraints: [] },
+    expected: "AP-003"
+  },
+  {
+    name: "remember task after a call",
+    model: { functionalNeed: "Resume task and remember next action", barrier: "Forgets where the task stopped after a phone interruption", task: "Complete multi-step work", context: "workplace", constraints: [] },
+    expected: "AP-002"
+  },
+  {
+    name: "repeated grasping causes effort",
+    model: { functionalNeed: "Reduce sustained grip effort", barrier: "Tool handle is hard to hold repeatedly", task: "Use a handheld tool", context: "low-risk task", constraints: [] },
+    expected: "AP-004"
+  },
+  {
+    name: "written transcript for spoken instructions",
+    model: { functionalNeed: "Support understanding of spoken instructions", barrier: "Important communication is hard to follow in real time", task: "Review captions and transcript", context: "service interaction", constraints: [] },
+    expected: "AP-005"
+  }
+];
+
+for (const scenario of regressionScenarios) {
+  test("regression: " + scenario.name, () => {
+    const ranked = matchAccommodationPatterns(scenario.model, accommodationPatterns, { limit: 5 });
+    assert.ok(ranked.length > 0, "expected one or more relevant options");
+    assert.equal(ranked[0].pattern.id, scenario.expected);
+    assert.ok(ranked[0].hasMeaningfulMatch);
+  });
+}
