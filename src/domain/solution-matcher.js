@@ -1,7 +1,7 @@
 const TOKEN_MAP = {
   "cognitive-load": ["information", "cognitive", "focus", "attention", "visual", "interrupt"],
   "task-resumption": ["resume", "interruption", "interrupt", "sequence", "multi-step", "remember", "next action"],
-  "web-orientation": ["website", "web", "navigation", "navigate", "form", "online", "page", "orientation"],
+  "web-orientation": ["website", "web", "navigation", "navigate", "form", "online", "orientation"],
   "physical-grip": ["grip", "handle", "tool", "hold", "hand", "force", "physical"],
   "communication-access": ["communication", "language", "translate", "caption", "transcript", "understand", "express", "speak"]
 };
