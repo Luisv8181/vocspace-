@@ -1,0 +1,10 @@
+{
+  "name": "vocspace-v0.1-foundation",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Synthetic-case domain model and prototype scaffolding for VocSpace.",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-domain.mjs"
+  }
+}
