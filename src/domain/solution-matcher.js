@@ -27,20 +27,57 @@ function overlapScore(text, tokens) {
   return tokens.filter((token) => normalized.includes(token)).length;
 }
 
+const NEGATION_CUES = /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding|unwanted)\b/g;
+
+/**
+ * Conservative clause-local negation. A positive follow-up clause should not
+ * be suppressed just because an earlier clause rejected a different option.
+ * This remains a heuristic, not natural-language understanding.
+ */
 function containsNegatedNeed(text, ruleTokens) {
-  const normalized = normalizedText(text);
-  const clauses = normalized.split(/[.!?;,\n]+/).map((part) => part.trim()).filter(Boolean);
+  const clauses = normalizedText(text)
+    .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
   return clauses.some((clause) => {
-    const mentionsPattern = ruleTokens.some((token) => clause.includes(token));
-    if (!mentionsPattern) return false;
-    return /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|not|never|no longer|without|avoid|avoids|avoiding|unwanted|don't want|do not want)\b/.test(clause);
+    const mentionIndexes = ruleTokens
+      .map((token) => clause.indexOf(token))
+      .filter((index) => index >= 0);
+    if (!mentionIndexes.length) return false;
+
+    for (const match of clause.matchAll(NEGATION_CUES)) {
+      const negationIndex = match.index ?? 0;
+      const nextTokenIndex = Math.min(
+        ...ruleTokens.map((token) => {
+          const index = clause.indexOf(token, negationIndex + match[0].length);
+          return index < 0 ? Number.POSITIVE_INFINITY : index;
+        })
+      );
+      const nearestPriorTokenIndex = Math.max(
+        -1,
+        ...mentionIndexes.filter((index) => index < negationIndex)
+      );
+      // Only suppress when a pattern term follows the negation cue in the
+      // same clause, before any punctuation/clause boundary.
+      if (nextTokenIndex !== Number.POSITIVE_INFINITY &&
+          (nearestPriorTokenIndex < 0 || nextTokenIndex < nearestPriorTokenIndex)) {
+        return true;
+      }
+    }
+    // "not captions", "no captions", and "no need for captions" have no
+    // multi-word cue, so handle only the narrow immediate pattern.
+    if (/\b(?:not|no)\s+(?:need for\s+)?(?:any\s+)?(?:captions?|transcripts?|translation|translated text|communication|language support|spoken instructions?)\b/.test(clause) &&
+        ruleTokens.some((token) => new RegExp("\\b" + token + "\\b").test(clause))) {
+      return true;
+    }
+    return false;
   });
 }
 
 /**
- * A conservative negation guard for explicit user preferences.
- * This is deliberately a simple baseline, not natural-language understanding:
- * ambiguous mixed statements still need human review.
+ * A conservative guard for explicit user preferences. Ambiguous or mixed
+ * statements still need confirmation and must not be treated as resolved.
  */
 export function hasNegatedPatternNeed(model, patternId) {
   const rule = PATTERN_BY_ID[patternId];
