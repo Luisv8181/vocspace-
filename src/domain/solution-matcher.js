@@ -7,11 +7,11 @@ const TOKEN_MAP = {
 };
 
 const PATTERN_BY_ID = {
-  "AP-001": { tokens: TOKEN_MAP["cognitive-load"], types: ["digital", "environmental", "organizational"] },
-  "AP-002": { tokens: TOKEN_MAP["task-resumption"], types: ["digital", "organizational"] },
-  "AP-003": { tokens: TOKEN_MAP["web-orientation"], types: ["digital"] },
-  "AP-004": { tokens: TOKEN_MAP["physical-grip"], types: ["physical", "assistive-technology"] },
-  "AP-005": { tokens: TOKEN_MAP["communication-access"], types: ["digital", "communication", "assistive-technology"] }
+  "AP-001": { tokens: TOKEN_MAP["cognitive-load"] },
+  "AP-002": { tokens: TOKEN_MAP["task-resumption"] },
+  "AP-003": { tokens: TOKEN_MAP["web-orientation"] },
+  "AP-004": { tokens: TOKEN_MAP["physical-grip"] },
+  "AP-005": { tokens: TOKEN_MAP["communication-access"] }
 };
 
 function normalizedText(value) {
@@ -24,11 +24,29 @@ function tokenize(value) {
 
 function overlapScore(text, tokens) {
   const normalized = normalizedText(text);
-  let hits = 0;
-  for (const token of tokens) {
-    if (normalized.includes(token)) hits += 1;
-  }
-  return hits;
+  return tokens.filter((token) => normalized.includes(token)).length;
+}
+
+function containsNegatedNeed(text, ruleTokens) {
+  const normalized = normalizedText(text);
+  const clauses = normalized.split(/[.!?;,\n]+/).map((part) => part.trim()).filter(Boolean);
+  return clauses.some((clause) => {
+    const mentionsPattern = ruleTokens.some((token) => clause.includes(token));
+    if (!mentionsPattern) return false;
+    return /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|not|never|no longer|without|avoid|avoids|avoiding|unwanted|don't want|do not want)\b/.test(clause);
+  });
+}
+
+/**
+ * A conservative negation guard for explicit user preferences.
+ * This is deliberately a simple baseline, not natural-language understanding:
+ * ambiguous mixed statements still need human review.
+ */
+export function hasNegatedPatternNeed(model, patternId) {
+  const rule = PATTERN_BY_ID[patternId];
+  if (!rule) return false;
+  const relevantFields = [model?.functionalNeed, model?.barrier].filter(Boolean);
+  return relevantFields.some((field) => containsNegatedNeed(field, rule.tokens));
 }
 
 export function hasSufficientContext(model) {
@@ -69,9 +87,10 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
   const queryTokens = tokenize(query);
 
   const ranked = patterns.map((pattern) => {
-    const rule = PATTERN_BY_ID[pattern.id] || { tokens: [], types: [] };
-    const primary = overlapScore(query, rule.tokens);
-    const needsScore = overlapScore(model.functionalNeed, rule.tokens);
+    const rule = PATTERN_BY_ID[pattern.id] || { tokens: [] };
+    const explicitlyNegated = hasNegatedPatternNeed(model, pattern.id);
+    const primary = explicitlyNegated ? 0 : overlapScore(query, rule.tokens);
+    const needsScore = explicitlyNegated ? 0 : overlapScore(model.functionalNeed, rule.tokens);
     const approachText = [
       pattern.title,
       pattern.mechanism,
@@ -81,21 +100,24 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
     const ignoredTokens = new Set(["task", "work", "help", "need", "make", "difficult", "support", "person", "thing", "something", "unable"]);
     const meaningfulTokens = [...new Set(queryTokens)].filter((token) => token.length >= 4 && !ignoredTokens.has(token));
     const patternTokens = tokenize(approachText);
-    const supporting = meaningfulTokens.filter((token) =>
+    const supporting = explicitlyNegated ? 0 : meaningfulTokens.filter((token) =>
       patternTokens.some((candidate) => candidate === token || candidate.startsWith(token) || token.startsWith(candidate))
     ).length;
-    const contextMatches = inferredContexts.filter((context) =>
+    const contextMatches = explicitlyNegated ? 0 : inferredContexts.filter((context) =>
       (pattern.contexts || []).some((entry) => {
         const p = normalizedText(entry);
         return p.includes(context) || context.includes(p);
       })
     ).length;
     const score = primary * 3 + needsScore * 4 + Math.min(supporting, 6) + contextMatches * 2;
-    const hasMeaningfulMatch = primary > 0 || needsScore > 0 || contextMatches > 0;
+    const hasMeaningfulMatch = !explicitlyNegated && (primary > 0 || needsScore > 0 || contextMatches > 0);
     const reasons = [];
-    if (needsScore > 0) reasons.push("The functional-need description overlaps with this pattern's focus.");
-    if (primary > 0) reasons.push("The task, barrier, or context contains terms associated with this pattern.");
-    if (contextMatches > 0) reasons.push("The inferred context overlaps with the pattern's documented contexts.");
+    if (explicitlyNegated) reasons.push("The functional-need or barrier text appears to explicitly reject this type of support, so it was suppressed by a conservative negation guard.");
+    else {
+      if (needsScore > 0) reasons.push("The functional-need description overlaps with this pattern's focus.");
+      if (primary > 0) reasons.push("The task, barrier, or context contains terms associated with this pattern.");
+      if (contextMatches > 0) reasons.push("The inferred context overlaps with the pattern's documented contexts.");
+    }
     if (reasons.length === 0) reasons.push("No direct matching signal was found. Consider clarifying the barrier or reviewing this pattern manually.");
     const confidence = score >= 12 ? "strong lexical match" : score >= 5 ? "possible match" : "exploratory alternative";
     return {
@@ -105,7 +127,7 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
       hasMeaningfulMatch,
       reasons,
       contextMatches,
-      matchedTerms: rule.tokens.filter((token) => normalizedText(query).includes(token))
+      matchedTerms: explicitlyNegated ? [] : rule.tokens.filter((token) => normalizedText(query).includes(token))
     };
   }).sort((a, b) => b.score - a.score || a.pattern.id.localeCompare(b.pattern.id));
 
