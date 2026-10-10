@@ -29,24 +29,23 @@ function overlapScore(text, tokens) {
 
 const NEGATION_CUES = /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding|unwanted|not interested in|not looking for|not required)\b/i;
 
+/**
+ * Free-text negation is too ambiguous to suppress a whole accommodation family.
+ * Keep all potentially relevant patterns visible, but require human confirmation
+ * whenever rejection or mixed preference wording overlaps with a pattern.
+ */
 function hasPreferenceConflict(model, ruleTokens) {
   const fields = [model?.functionalNeed, model?.barrier, model?.task, model?.context]
     .filter(Boolean)
-    .map((field) => String(field));
+    .map(String);
   return fields.some((field) =>
     NEGATION_CUES.test(field) && ruleTokens.some((token) => normalizedText(field).includes(token))
   );
 }
 
-/**
- * Compatibility export retained for callers, but this no longer suppresses
- * results. Negative or mixed preferences trigger a confirmation flag instead.
- * Free-text negation is too ambiguous for a safe automatic veto.
- */
 export function hasNegatedPatternNeed(model, patternId) {
   const rule = PATTERN_BY_ID[patternId];
-  if (!rule) return false;
-  return hasPreferenceConflict(model, rule.tokens);
+  return rule ? hasPreferenceConflict(model, rule.tokens) : false;
 }
 
 export function hasSufficientContext(model) {
