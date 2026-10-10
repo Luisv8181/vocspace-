@@ -186,7 +186,7 @@ for (const scenario of regressionScenarios) {
   });
 }
 
-test("explicit negation suppresses a directly rejected support", () => {
+test("negated and mixed preferences keep relevant options visible with confirmation", () => {
   const model = {
     functionalNeed: "I do not need captions or transcripts",
     barrier: "It is difficult to follow spoken instructions",
@@ -195,10 +195,13 @@ test("explicit negation suppresses a directly rejected support", () => {
     constraints: []
   };
   const matches = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.ok(!matches.some((item) => item.pattern.id === "AP-005"));
+  const communication = matches.find((item) => item.pattern.id === "AP-005");
+  assert.ok(communication, "a potential option should not be silently suppressed");
+  assert.equal(communication.requiresPreferenceConfirmation, true);
+  assert.ok(communication.reasons.some((reason) => reason.includes("Confirm with the person")));
 });
 
-test("a positive alternative after rejecting captions is not suppressed", () => {
+test("a positive alternative after rejecting captions stays matchable", () => {
   const model = {
     functionalNeed: "I do not need captions, but a written transcript would help",
     barrier: "I have difficulty following spoken instructions and need a transcript",
@@ -207,8 +210,7 @@ test("a positive alternative after rejecting captions is not suppressed", () => 
     constraints: []
   };
   const matches = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.ok(matches.some((item) => item.pattern.id === "AP-005"),
-    "positive transcript need should remain matchable after a contrast clause");
+  assert.ok(matches.some((item) => item.pattern.id === "AP-005"));
 });
 
 test("unrelated negation does not suppress a communication-access need", () => {
@@ -220,7 +222,9 @@ test("unrelated negation does not suppress a communication-access need", () => {
     constraints: []
   };
   const matches = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.ok(matches.some((item) => item.pattern.id === "AP-005"));
+  const communication = matches.find((item) => item.pattern.id === "AP-005");
+  assert.ok(communication);
+  assert.equal(communication.requiresPreferenceConfirmation, true);
 });
 
 test("HTML text is escaped before rendering", () => {
