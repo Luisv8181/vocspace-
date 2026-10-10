@@ -15,7 +15,7 @@ const PATTERN_BY_ID = {
 };
 
 function normalizedText(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9\s-]/g, " ");
+  return String(value || "").toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function tokenize(value) {
@@ -27,45 +27,33 @@ function overlapScore(text, tokens) {
   return tokens.filter((token) => normalized.includes(token)).length;
 }
 
-const NEGATION_CUES = /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding|unwanted)\b/g;
+const CLEAR_REJECTION = /^(?:i\s+)?(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding)(?:\s+(?:need|want|use|prefer|require|wish to have))?\s+(?:any\s+)?(?:the\s+)?(?:captions?|transcripts?|translation|translated text|communication support|language support|spoken instructions?|visual focus|attention support|reminders?|task prompts?|grip support|handles?|navigation support|website navigation)\s*[.!?]*$/i;
 
-/**
- * Only suppress direct rejected mentions. Split on contrast clauses to prevent
- * a rejected term from cancelling a positive alternative. This is a narrow
- * rule-based safeguard, not natural-language understanding.
- */
-function hasRejectedMention(text, ruleTokens) {
-  const clauses = normalizedText(text)
-    .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/)
+function containsClearRejectedNeed(text, ruleTokens) {
+  const clauses = String(text || "")
+    .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/i)
     .map((part) => part.trim())
     .filter(Boolean);
 
   return clauses.some((clause) => {
-    for (const cue of clause.matchAll(NEGATION_CUES)) {
-      const objectWindow = clause
-        .slice((cue.index ?? 0) + cue[0].length)
-        .trim()
-        .split(/\s+/)
-        .slice(0, 5)
-        .join(" ");
-      if (ruleTokens.some((token) => {
-        const safeToken = token.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\$&");
-        return new RegExp("\\b" + safeToken + "\\b").test(objectWindow);
-      })) return true;
-    }
-
-    // Keep the compact "no captions" construction intentionally limited.
-    return /\b(?:not|no)\s+(?:any\s+)?(?:captions?|transcripts?|translation|translated text|communication|language support|spoken instructions?)\b/.test(clause) &&
-      ruleTokens.some((token) => clause.includes(token));
+    const normalized = normalizedText(clause);
+    if (!normalized || !ruleTokens.some((token) => normalized.includes(token))) return false;
+    // Suppress only short, explicit rejection statements. Long/mixed prose is
+    // ambiguous and remains discoverable, with user confirmation still needed.
+    return normalized.split(" ").length <= 9 && CLEAR_REJECTION.test(clause);
   });
 }
 
+/**
+ * Narrow guard: suppress only short, explicit rejections.
+ * This deliberately avoids guessing intent in mixed or compound prose.
+ */
 export function hasNegatedPatternNeed(model, patternId) {
   const rule = PATTERN_BY_ID[patternId];
   if (!rule) return false;
   return [model?.functionalNeed, model?.barrier]
     .filter(Boolean)
-    .some((field) => hasRejectedMention(field, rule.tokens));
+    .some((field) => containsClearRejectedNeed(field, rule.tokens));
 }
 
 export function hasSufficientContext(model) {
