@@ -36,7 +36,7 @@ See:
 
 ## Status
 
-Early architecture and discovery. The first implementation will use synthetic/demo cases and focus on the barrier-to-solution workflow before adding sensitive case management or automated employer integrations.
+Early architecture and discovery. The first implementation uses synthetic/demo cases and focuses on the barrier-to-solution workflow before adding sensitive case management or automated employer integrations.
 
 ## Design principles
 
@@ -50,13 +50,21 @@ Early architecture and discovery. The first implementation will use synthetic/de
 
 ## Transparent solution matching
 
-The prototype includes a deterministic, inspectable baseline matcher. It uses lexical/context overlap to rank draft accommodation patterns, returns explanations and matched terms, and routes patterns to resource categories. It is a prototype heuristic, not a validated recommendation model. Review [Solution Matching](docs/SOLUTION-MATCHING.md). Run `npm run validate`.
+The prototype includes a deterministic, inspectable baseline matcher. It uses lexical/context overlap to rank draft accommodation patterns, returns explanations and matched terms, and routes patterns to resource categories. It includes a narrow guard for explicitly negated pattern needs, but this is not natural-language understanding. The matcher remains a prototype heuristic, not a validated recommendation model. Review [Solution Matching](docs/SOLUTION-MATCHING.md).
 
+Run:
+- `npm run validate` for syntax, domain, matching, and rendering-safety checks.
+- `npm run test:matching` for matching scenarios.
+- `npm run test:rendering` for HTML escaping and link-rendering checks.
 
 ## Agent handoff: solution matching
 
-The functional-model matcher and action-plan schema live in `src/domain/solution-matcher.js` and `src/domain/action-plan.js`. The baseline is a transparent heuristic, not a validated recommendation model. See `docs/SOLUTION-MATCHING.md`. Run `npm run validate`; CI checks schema integrity and matching scenarios. The next priority is evaluate relevance with reviewed examples and user input before adding generative AI or sensitive case management.
+The functional-model matcher and action-plan schema live in `src/domain/solution-matcher.js` and `src/domain/action-plan.js`. The baseline is not a validated recommendation model. The next priority is to evaluate relevance with qualified reviewers and user input before adding generative AI or sensitive case management.
 
 ## Source catalog
 
 The prototype includes a compact catalog of official JAN pages for discovery and future human review. Pattern-to-source mappings are provisional: patterns remain draft and have not been upgraded to evidence-validated status. See [Source Catalog and Pattern Mapping](docs/SOURCE-CATALOG-AND-PATTERN-MAPPING.md) and [Evidence and Source Provenance](docs/EVIDENCE-AND-SOURCE-PROVENANCE.md).
+
+## Accessibility QA
+
+The repo now includes a repeatable [Accessibility QA Checklist](docs/ACCESSIBILITY-QA-CHECKLIST.md) for keyboard, screen-reader, responsive, visual, and functional testing. Automated rendering tests are not a substitute for manual testing. Do not describe the prototype as accessibility-tested until actual browser and assistive-technology results have been recorded.
