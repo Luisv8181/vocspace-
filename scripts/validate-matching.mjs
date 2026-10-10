@@ -186,52 +186,68 @@ for (const scenario of regressionScenarios) {
   });
 }
 
-test("negated preferences are not presented as positive needs", () => {
+test("explicit negation suppresses a directly rejected support", () => {
   const model = {
     functionalNeed: "I do not need captions or transcripts",
-    barrier: "I prefer spoken instructions and do not want translated text",
+    barrier: "It is difficult to follow spoken instructions",
     task: "Receive spoken instructions",
     context: "service interaction",
     constraints: []
   };
   const matches = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.ok(!matches.some((item) => item.pattern.id === "AP-005"),
-    "a simple negation guard should prevent a direct positive communication-access match");
+  assert.ok(!matches.some((item) => item.pattern.id === "AP-005"));
 });
 
-test("user text is escaped before it is inserted into rendered pattern HTML", () => {
+test("a positive alternative after rejecting captions is not suppressed", () => {
+  const model = {
+    functionalNeed: "I do not need captions, but a written transcript would help",
+    barrier: "I have difficulty following spoken instructions and need a transcript",
+    task: "Review instructions after a conversation",
+    context: "service interaction",
+    constraints: []
+  };
+  const matches = matchAccommodationPatterns(model, accommodationPatterns);
+  assert.ok(matches.some((item) => item.pattern.id === "AP-005"),
+    "positive transcript need should remain matchable after a contrast clause");
+});
+
+test("unrelated negation does not suppress a communication-access need", () => {
+  const model = {
+    functionalNeed: "I do not want to change the meeting time; I need translated instructions",
+    barrier: "Understanding translated communication is important",
+    task: "Understand spoken instructions",
+    context: "service interaction",
+    constraints: []
+  };
+  const matches = matchAccommodationPatterns(model, accommodationPatterns);
+  assert.ok(matches.some((item) => item.pattern.id === "AP-005"));
+});
+
+test("HTML text is escaped before rendering", () => {
   assert.equal(
     escapeHtml('<img src=x onerror="alert(1)"> & it\'s'),
     "&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; it&#39;s"
   );
-  const dangerousPattern = {
-    id: "AP-X",
-    title: '<script>alert("title")</script>',
-    mechanism: "Safe mechanism",
-    functionalNeed: "Support safe rendering",
-    tradeoffs: ["<svg onload=alert(1)>"],
-    validationIdeas: ["check & verify"],
-    contexts: [],
-    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["SRC-X"] },
-    reviewStatus: "draft",
-    resourceCategories: []
-  };
-  const dangerousSource = {
-    id: "SRC-X",
-    title: 'Source <img src=x onerror="x">',
-    url: 'https://example.org/path?q="bad"&other=<bad>',
-    limitations: ["<script>do not run</script>"]
-  };
-  const html = renderMatchedPatterns(
-    [{ pattern: dangerousPattern, confidence: "possible match", reasons: ["Input <unsafe>"], matchedTerms: ["<term>"] }],
-    [],
-    [dangerousSource]
-  );
+  const html = renderMatchedPatterns([{
+    pattern: {
+      id: "AP-X",
+      title: '<script>alert("title")</script>',
+      mechanism: "Safe mechanism",
+      functionalNeed: "Support safe rendering",
+      tradeoffs: ["<svg onload=alert(1)>"],
+      validationIdeas: ["check & verify"],
+      contexts: [],
+      provenance: { classes: ["vocspace-synthesis"], sourceIds: [] },
+      reviewStatus: "draft",
+      resourceCategories: []
+    },
+    confidence: "possible match",
+    reasons: ["Input <unsafe>"],
+    matchedTerms: ["<term>"]
+  }], [], []);
   assert.ok(html.includes("&lt;script&gt;alert("));
   assert.ok(!html.includes("<script>alert("));
   assert.ok(html.includes("&lt;svg onload=alert(1)&gt;"));
-  assert.ok(html.includes("&lt;img src=x onerror=&quot;x&quot;&gt;"));
-  assert.ok(html.includes('rel="noopener noreferrer"'));
 });
 
 test("source catalog safely escapes content and labels the destination", () => {
