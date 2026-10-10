@@ -30,60 +30,65 @@ function overlapScore(text, tokens) {
 const NEGATION_CUES = /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding|unwanted)\b/g;
 
 /**
- * Conservative clause-local negation. A positive follow-up clause should not
- * be suppressed just because an earlier clause rejected a different option.
- * This remains a heuristic, not natural-language understanding.
+ * Returns true only for a pattern explicitly rejected within a clause.
+ * Mixed/contrastive statements are treated as ambiguous instead of suppressing
+ * the whole pattern. The matcher cannot reliably infer intent from natural
+ * language, so this remains a safeguard rather than a semantic classifier.
  */
-function containsNegatedNeed(text, ruleTokens) {
-  const clauses = normalizedText(text)
+function hasRejectedMention(text, ruleTokens) {
+  const normalized = normalizedText(text);
+  const clauses = normalized
     .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/)
     .map((part) => part.trim())
     .filter(Boolean);
 
   return clauses.some((clause) => {
-    const mentionIndexes = ruleTokens
+    const hasMention = ruleTokens.some((token) => clause.includes(token));
+    if (!hasMention) return false;
+    const cueMatches = [...clause.matchAll(NEGATION_CUES)];
+    if (!cueMatches.length) return false;
+    const mentionPositions = ruleTokens
       .map((token) => clause.indexOf(token))
       .filter((index) => index >= 0);
-    if (!mentionIndexes.length) return false;
-
-    for (const match of clause.matchAll(NEGATION_CUES)) {
-      const negationIndex = match.index ?? 0;
-      const nextTokenIndex = Math.min(
-        ...ruleTokens.map((token) => {
-          const index = clause.indexOf(token, negationIndex + match[0].length);
-          return index < 0 ? Number.POSITIVE_INFINITY : index;
-        })
+    return cueMatches.some((cue) => {
+      const cueIndex = cue.index ?? 0;
+      const subsequentMention = mentionPositions.some((index) =>
+        index >= cueIndex + cue[0].length
       );
-      const nearestPriorTokenIndex = Math.max(
-        -1,
-        ...mentionIndexes.filter((index) => index < negationIndex)
-      );
-      // Only suppress when a pattern term follows the negation cue in the
-      // same clause, before any punctuation/clause boundary.
-      if (nextTokenIndex !== Number.POSITIVE_INFINITY &&
-          (nearestPriorTokenIndex < 0 || nextTokenIndex < nearestPriorTokenIndex)) {
-        return true;
-      }
-    }
-    // "not captions", "no captions", and "no need for captions" have no
-    // multi-word cue, so handle only the narrow immediate pattern.
-    if (/\b(?:not|no)\s+(?:need for\s+)?(?:any\s+)?(?:captions?|transcripts?|translation|translated text|communication|language support|spoken instructions?)\b/.test(clause) &&
-        ruleTokens.some((token) => new RegExp("\\b" + token + "\\b").test(clause))) {
-      return true;
-    }
-    return false;
+      return subsequentMention;
+    });
   });
 }
 
+function hasMixedPositiveAndNegative(text, ruleTokens) {
+  const normalized = normalizedText(text);
+  const clauses = normalized
+    .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  let sawRejectedMention = false;
+  let sawPositiveMention = false;
+  for (const clause of clauses) {
+    const hasMention = ruleTokens.some((token) => clause.includes(token));
+    if (!hasMention) continue;
+    if (hasRejectedMention(clause, ruleTokens)) sawRejectedMention = true;
+    else sawPositiveMention = true;
+  }
+  return sawRejectedMention && sawPositiveMention;
+}
+
 /**
- * A conservative guard for explicit user preferences. Ambiguous or mixed
- * statements still need confirmation and must not be treated as resolved.
+ * This guard is intentionally narrow. If the user rejects one term but also
+ * asks for another support in the same pattern family, return false here so
+ * the pattern remains discoverable. The UI should preserve human confirmation.
  */
 export function hasNegatedPatternNeed(model, patternId) {
   const rule = PATTERN_BY_ID[patternId];
   if (!rule) return false;
   const relevantFields = [model?.functionalNeed, model?.barrier].filter(Boolean);
-  return relevantFields.some((field) => containsNegatedNeed(field, rule.tokens));
+  return relevantFields.some((field) =>
+    hasRejectedMention(field, rule.tokens) && !hasMixedPositiveAndNegative(field, rule.tokens)
+  );
 }
 
 export function hasSufficientContext(model) {
