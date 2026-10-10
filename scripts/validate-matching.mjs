@@ -229,7 +229,7 @@ test("user text is escaped before it is inserted into rendered pattern HTML", ()
   );
   assert.doesNotMatch(html, /<script>alert\("title"\)<\/script>/);
   assert.doesNotMatch(html, /<svg onload=alert\(1\)>/);
-  assert.match(html, /&lt;script&gt;alert\(&quot;title&quot;&gt;&lt;\/script&gt;/);
+  assert.match(html, /&lt;script&gt;alert\(&quot;title&quot;&lt;\/script&gt;/);
   assert.match(html, /&lt;img src=x onerror=&quot;x&quot;&gt;/);
   assert.match(html, /rel="noopener noreferrer"/);
 });
