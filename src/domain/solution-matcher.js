@@ -30,65 +30,42 @@ function overlapScore(text, tokens) {
 const NEGATION_CUES = /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding|unwanted)\b/g;
 
 /**
- * Returns true only for a pattern explicitly rejected within a clause.
- * Mixed/contrastive statements are treated as ambiguous instead of suppressing
- * the whole pattern. The matcher cannot reliably infer intent from natural
- * language, so this remains a safeguard rather than a semantic classifier.
+ * Only suppress direct rejected mentions. Split on contrast clauses to prevent
+ * a rejected term from cancelling a positive alternative. This is a narrow
+ * rule-based safeguard, not natural-language understanding.
  */
 function hasRejectedMention(text, ruleTokens) {
-  const normalized = normalizedText(text);
-  const clauses = normalized
+  const clauses = normalizedText(text)
     .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/)
     .map((part) => part.trim())
     .filter(Boolean);
 
   return clauses.some((clause) => {
-    const hasMention = ruleTokens.some((token) => clause.includes(token));
-    if (!hasMention) return false;
-    const cueMatches = [...clause.matchAll(NEGATION_CUES)];
-    if (!cueMatches.length) return false;
-    const mentionPositions = ruleTokens
-      .map((token) => clause.indexOf(token))
-      .filter((index) => index >= 0);
-    return cueMatches.some((cue) => {
-      const cueIndex = cue.index ?? 0;
-      const subsequentMention = mentionPositions.some((index) =>
-        index >= cueIndex + cue[0].length
-      );
-      return subsequentMention;
-    });
+    for (const cue of clause.matchAll(NEGATION_CUES)) {
+      const objectWindow = clause
+        .slice((cue.index ?? 0) + cue[0].length)
+        .trim()
+        .split(/\s+/)
+        .slice(0, 5)
+        .join(" ");
+      if (ruleTokens.some((token) => {
+        const safeToken = token.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\$&");
+        return new RegExp("\\b" + safeToken + "\\b").test(objectWindow);
+      })) return true;
+    }
+
+    // Keep the compact "no captions" construction intentionally limited.
+    return /\b(?:not|no)\s+(?:any\s+)?(?:captions?|transcripts?|translation|translated text|communication|language support|spoken instructions?)\b/.test(clause) &&
+      ruleTokens.some((token) => clause.includes(token));
   });
 }
 
-function hasMixedPositiveAndNegative(text, ruleTokens) {
-  const normalized = normalizedText(text);
-  const clauses = normalized
-    .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  let sawRejectedMention = false;
-  let sawPositiveMention = false;
-  for (const clause of clauses) {
-    const hasMention = ruleTokens.some((token) => clause.includes(token));
-    if (!hasMention) continue;
-    if (hasRejectedMention(clause, ruleTokens)) sawRejectedMention = true;
-    else sawPositiveMention = true;
-  }
-  return sawRejectedMention && sawPositiveMention;
-}
-
-/**
- * This guard is intentionally narrow. If the user rejects one term but also
- * asks for another support in the same pattern family, return false here so
- * the pattern remains discoverable. The UI should preserve human confirmation.
- */
 export function hasNegatedPatternNeed(model, patternId) {
   const rule = PATTERN_BY_ID[patternId];
   if (!rule) return false;
-  const relevantFields = [model?.functionalNeed, model?.barrier].filter(Boolean);
-  return relevantFields.some((field) =>
-    hasRejectedMention(field, rule.tokens) && !hasMixedPositiveAndNegative(field, rule.tokens)
-  );
+  return [model?.functionalNeed, model?.barrier]
+    .filter(Boolean)
+    .some((field) => hasRejectedMention(field, rule.tokens));
 }
 
 export function hasSufficientContext(model) {
