@@ -227,11 +227,11 @@ test("user text is escaped before it is inserted into rendered pattern HTML", ()
     [],
     [dangerousSource]
   );
-  assert.doesNotMatch(html, /<script>alert\("title"\)<\/script>/);
-  assert.doesNotMatch(html, /<svg onload=alert\(1\)>/);
-  assert.match(html, /&lt;script&gt;alert\(&quot;title&quot;&lt;\/script&gt;/);
-  assert.match(html, /&lt;img src=x onerror=&quot;x&quot;&gt;/);
-  assert.match(html, /rel="noopener noreferrer"/);
+  assert.ok(html.includes("&lt;script&gt;alert("));
+  assert.ok(!html.includes("<script>alert("));
+  assert.ok(html.includes("&lt;svg onload=alert(1)&gt;"));
+  assert.ok(html.includes("&lt;img src=x onerror=&quot;x&quot;&gt;"));
+  assert.ok(html.includes('rel="noopener noreferrer"'));
 });
 
 test("source catalog safely escapes content and labels the destination", () => {
@@ -244,8 +244,8 @@ test("source catalog safely escapes content and labels the destination", () => {
     supports: ["claim <unsafe>"],
     limitations: ["not <validated>"]
   }]);
-  assert.doesNotMatch(html, /<iframe src="javascript:alert\(1\)">/);
-  assert.doesNotMatch(html, /<script>/);
-  assert.match(html, /target="_blank" rel="noopener noreferrer"/);
-  assert.match(html, /&lt;iframe/);
+  assert.ok(!html.includes("<iframe src="));
+  assert.ok(!html.includes("<script>"));
+  assert.ok(html.includes('target="_blank" rel="noopener noreferrer"'));
+  assert.ok(html.includes("&lt;iframe"));
 });
