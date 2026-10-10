@@ -5,24 +5,22 @@ import { accommodationPatterns } from "../src/data/accommodation-patterns.js";
 import { resourceCategories } from "../src/data/resources.js";
 import { matchAccommodationPatterns, routeResources, hasSufficientContext } from "../src/domain/solution-matcher.js";
 import { createActionPlan } from "../src/domain/action-plan.js";
+import { escapeHtml, renderMatchedPatterns, renderSourceCatalog } from "../src/ui/presentation.js";
 
 test("synthetic cognitive-load case ranks information reduction first", () => {
-  const model = syntheticCases[0];
-  const ranked = matchAccommodationPatterns(model, accommodationPatterns);
+  const ranked = matchAccommodationPatterns(syntheticCases[0], accommodationPatterns);
   assert.equal(ranked[0].pattern.id, "AP-001");
   assert.ok(ranked[0].reasons.length > 0);
 });
 
 test("website navigation case ranks website orientation first", () => {
   const model = syntheticCases.find((item) => item.id === "case-web-navigation-002");
-  const ranked = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.equal(ranked[0].pattern.id, "AP-003");
+  assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-003");
 });
 
 test("grip case ranks the physical grip pattern first", () => {
   const model = syntheticCases.find((item) => item.id === "case-tool-grip-003");
-  const ranked = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.equal(ranked[0].pattern.id, "AP-004");
+  assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-004");
 });
 
 test("results are limited and expose transparent explanations", () => {
@@ -66,7 +64,6 @@ test("custom barrier with grip-related need ranks grip pattern first", () => {
   assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-004");
 });
 
-
 test("under-specified input requests more context instead of ranking", () => {
   const model = { functionalNeed: "", barrier: "", task: "", context: "", constraints: [] };
   assert.equal(hasSufficientContext(model), false);
@@ -81,8 +78,7 @@ test("unrelated input produces no misleading ranked result", () => {
     context: "personal hobby at home",
     constraints: []
   };
-  const ranked = matchAccommodationPatterns(model, accommodationPatterns);
-  assert.deepEqual(ranked, []);
+  assert.deepEqual(matchAccommodationPatterns(model, accommodationPatterns), []);
 });
 
 test("communication support ranks communication-access pattern first", () => {
@@ -127,7 +123,6 @@ test("task resumption matches interruptions and next-action language", () => {
   };
   assert.equal(matchAccommodationPatterns(model, accommodationPatterns)[0].pattern.id, "AP-002");
 });
-
 
 const regressionScenarios = [
   {
@@ -189,4 +184,68 @@ for (const scenario of regressionScenarios) {
     assert.equal(ranked[0].pattern.id, scenario.expected);
     assert.ok(ranked[0].hasMeaningfulMatch);
   });
+}
+
+test("negated preferences are not presented as positive needs", () => {
+  const model = {
+    functionalNeed: "I do not need captions or transcripts",
+    barrier: "I prefer spoken instructions and do not want translated text",
+    task: "Receive spoken instructions",
+    context: "service interaction",
+    constraints: []
+  };
+  const matches = matchAccommodationPatterns(model, accommodationPatterns);
+  assert.ok(!matches.some((item) => item.pattern.id === "AP-005"),
+    "a simple negation guard should prevent a direct positive communication-access match");
+});
+
+test("user text is escaped before it is inserted into rendered pattern HTML", () => {
+  assert.equal(
+    escapeHtml('<img src=x onerror="alert(1)"> & it\'s'),
+    "&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; it&#39;s"
+  );
+  const dangerousPattern = {
+    id: "AP-X",
+    title: '<script>alert("title")</script>',
+    mechanism: "Safe mechanism",
+    functionalNeed: "Support safe rendering",
+    tradeoffs: ["<svg onload=alert(1)>"],
+    validationIdeas: ["check & verify"],
+    contexts: [],
+    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["SRC-X"] },
+    reviewStatus: "draft",
+    resourceCategories: []
+  };
+  const dangerousSource = {
+    id: "SRC-X",
+    title: 'Source <img src=x onerror="x">',
+    url: 'https://example.org/path?q="bad"&other=<bad>',
+    limitations: ["<script>do not run</script>"]
+  };
+  const html = renderMatchedPatterns(
+    [{ pattern: dangerousPattern, confidence: "possible match", reasons: ["Input <unsafe>"], matchedTerms: ["<term>"] }],
+    [],
+    [dangerousSource]
+  );
+  assert.doesNotMatch(html, /<script>alert\("title"\)<\/script>/);
+  assert.doesNotMatch(html, /<svg onload=alert\(1\)>/);
+  assert.match(html, /&lt;script&gt;alert\(&quot;title&quot;\)&lt;\/script&gt;/);
+  assert.match(html, /&lt;img src=x onerror=&quot;x&quot;&gt;/);
+  assert.match(html, /rel="noopener noreferrer"/);
+});
+
+test("source catalog safely escapes content and labels the destination", () => {
+  const html = renderSourceCatalog([{
+    id: "SRC-1",
+    title: '<iframe src="javascript:alert(1)">',
+    url: "https://example.org/source",
+    publisher: "Publisher <script>",
+    reviewStatus: "human-review-required",
+    supports: ["claim <unsafe>"],
+    limitations: ["not <validated>"]
+  }]);
+  assert.doesNotMatch(html, /<iframe src="javascript:alert\(1\)">/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /&lt;iframe/);
 }
