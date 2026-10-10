@@ -7,20 +7,12 @@ import { matchAccommodationPatterns, hasSufficientContext } from "../domain/solu
 import { escapeHtml, renderOptions, renderResourceOptions, renderMatchedPatterns, renderSourceCatalog } from "./presentation.js";
 
 const root = document.querySelector("#app");
-const solutionSection = (options) => `
-  <section class="panel" aria-labelledby="solution-title">
-    <h2 id="solution-title">2. Compare solution pathways</h2>
-    <p>No single option is presumed correct. Compare mechanisms, tradeoffs, and implementation needs.</p>
-    <div class="solution-grid">${renderOptions(options)}</div>
-    <button id="build-plan" type="button">Build an action plan from selected options</button>
-    <div id="action-plan" aria-live="polite"></div>
-  </section>
-`;
 
 function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
   const item = syntheticCases.find((candidate) => candidate.id === caseId) || syntheticCases[0];
   if (!root || !item) return;
   const model = customModel || item;
+  const customMode = Boolean(customModel);
 
   root.innerHTML = `
     <section class="hero" aria-labelledby="page-title">
@@ -34,8 +26,8 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       <h2 id="input-title">1. Describe or explore a barrier</h2>
       <label for="case-select">Start with a synthetic example</label>
       <select id="case-select">
-        <option value="custom" ${customModel ? "selected" : ""}>Describe a barrier (local draft)</option>
-        ${syntheticCases.map((candidate) => `<option value="${escapeHtml(candidate.id)}" ${!customModel && candidate.id === item.id ? "selected" : ""}>${escapeHtml(candidate.title)}</option>`).join("")}
+        <option value="custom" ${customMode ? "selected" : ""}>Describe a barrier (local draft)</option>
+        ${syntheticCases.map((candidate) => `<option value="${escapeHtml(candidate.id)}" ${!customMode && candidate.id === item.id ? "selected" : ""}>${escapeHtml(candidate.title)}</option>`).join("")}
       </select>
       <form id="barrier-form">
         <p class="helper">Use general, non-identifying language. This prototype does not save your entry or send it to a service.</p>
@@ -68,10 +60,10 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       <h2 id="solution-title">2. Compare solution pathways</h2>
       <p>Patterns are ranked using transparent keyword/context matching. These are candidate ideas, not probabilities or guaranteed recommendations.</p>
       <div id="matched-solutions" class="solution-grid"></div>
-      <h3 id="case-options-heading">Existing case options</h3>
-      <p id="case-options-description">These are case-specific illustrative options, separate from pattern matching. For a custom barrier, use the ranked patterns below and do not assume these options apply.</p>
-      <p id="custom-options-note" hidden>Custom barrier mode: preset case options are hidden because they have not been tailored to this model.</p>
-      <div class="solution-grid" id="case-options">${renderOptions(item.solutions)}</div>
+      <h3 id="case-options-heading" ${customMode ? "hidden" : ""}>Existing case options</h3>
+      <p id="case-options-description" ${customMode ? "hidden" : ""}>These are case-specific illustrative options, separate from pattern matching. For a custom barrier, use the ranked patterns below and do not assume these options apply.</p>
+      <p id="custom-options-note" ${customMode ? "" : "hidden"}>Custom barrier mode: preset case options are hidden because they have not been tailored to this model.</p>
+      <div class="solution-grid" id="case-options" ${customMode ? "hidden" : ""}>${renderOptions(item.solutions)}</div>
       <button id="build-plan" type="button">Build an action plan from selected options</button>
       <div id="action-plan" aria-live="polite"></div>
     </section>
@@ -115,15 +107,6 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       matchedRoot.innerHTML = '<p class="notice" role="status">No clear pattern match found. Add context, try different wording, or review the pattern library manually. Do not treat unrelated results as recommendations.</p>';
     }
   }
-
-  const caseOptionsRoot = document.querySelector("#case-options");
-  const caseOptionsHeading = document.querySelector("#case-options-heading");
-  const caseOptionsDescription = document.querySelector("#case-options-description");
-  const customOptionsNote = document.querySelector("#custom-options-note");
-  if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
-  if (caseOptionsHeading) caseOptionsHeading.hidden = Boolean(customModel);
-  if (caseOptionsDescription) caseOptionsDescription.hidden = Boolean(customModel);
-  if (customOptionsNote) customOptionsNote.hidden = !customModel;
 
   document.querySelector("#case-select")?.addEventListener("change", (event) => {
     if (event.target.value === "custom") renderCase(syntheticCases[0].id, {
@@ -172,20 +155,18 @@ function renderCase(caseId = syntheticCases[0]?.id, customModel = null) {
       }
     }
     const caseOptionsRoot = document.querySelector("#case-options");
-    if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
     const caseOptionsHeading = document.querySelector("#case-options-heading");
     const caseOptionsDescription = document.querySelector("#case-options-description");
     const customOptionsNote = document.querySelector("#custom-options-note");
-    if (caseOptionsRoot) caseOptionsRoot.hidden = Boolean(customModel);
-    if (caseOptionsHeading) caseOptionsHeading.hidden = Boolean(customModel);
-    if (caseOptionsDescription) caseOptionsDescription.hidden = Boolean(customModel);
-    if (customOptionsNote) customOptionsNote.hidden = !customModel;
-
+    if (caseOptionsRoot) caseOptionsRoot.hidden = customMode;
+    if (caseOptionsHeading) caseOptionsHeading.hidden = customMode;
+    if (caseOptionsDescription) caseOptionsDescription.hidden = customMode;
+    if (customOptionsNote) customOptionsNote.hidden = !customMode;
   });
 
   document.querySelector("#build-plan")?.addEventListener("click", () => {
     const selectedIds = Array.from(document.querySelectorAll('input[name="selectedSolution"]:checked')).map((input) => input.value);
-    const selectedCaseOptions = item.solutions.filter((solution) => selectedIds.includes(solution.id));
+    const selectedCaseOptions = customMode ? [] : item.solutions.filter((solution) => selectedIds.includes(solution.id));
     const selectedPatternIds = Array.from(document.querySelectorAll('input[name="selectedPattern"]:checked')).map((input) => input.value);
     const latestModel = {
       participationGoal: document.querySelector("#goal")?.value?.trim() || model.participationGoal,
