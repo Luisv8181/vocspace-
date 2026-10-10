@@ -15,7 +15,7 @@ const PATTERN_BY_ID = {
 };
 
 function normalizedText(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
+  return String(value || "").toLowerCase().replace(/[^a-z0-9\s-]/g, " ");
 }
 
 function tokenize(value) {
@@ -27,33 +27,26 @@ function overlapScore(text, tokens) {
   return tokens.filter((token) => normalized.includes(token)).length;
 }
 
-const CLEAR_REJECTION = /^(?:i\s+)?(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding)(?:\s+(?:need|want|use|prefer|require|wish to have))?\s+(?:any\s+)?(?:the\s+)?(?:captions?|transcripts?|translation|translated text|communication support|language support|spoken instructions?|visual focus|attention support|reminders?|task prompts?|grip support|handles?|navigation support|website navigation)\s*[.!?]*$/i;
+const NEGATION_CUES = /\b(?:do not|don't|dont|does not|doesn't|doesnt|did not|didn't|didnt|never|no longer|without|avoid|avoids|avoiding|unwanted|not interested in|not looking for|not required)\b/i;
 
-function containsClearRejectedNeed(text, ruleTokens) {
-  const clauses = String(text || "")
-    .split(/[.!?;,\n]+|\bbut\b|\bhowever\b|\binstead\b|\balthough\b/i)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  return clauses.some((clause) => {
-    const normalized = normalizedText(clause);
-    if (!normalized || !ruleTokens.some((token) => normalized.includes(token))) return false;
-    // Suppress only short, explicit rejection statements. Long/mixed prose is
-    // ambiguous and remains discoverable, with user confirmation still needed.
-    return normalized.split(" ").length <= 9 && CLEAR_REJECTION.test(clause);
-  });
+function hasPreferenceConflict(model, ruleTokens) {
+  const fields = [model?.functionalNeed, model?.barrier, model?.task, model?.context]
+    .filter(Boolean)
+    .map((field) => String(field));
+  return fields.some((field) =>
+    NEGATION_CUES.test(field) && ruleTokens.some((token) => normalizedText(field).includes(token))
+  );
 }
 
 /**
- * Narrow guard: suppress only short, explicit rejections.
- * This deliberately avoids guessing intent in mixed or compound prose.
+ * Compatibility export retained for callers, but this no longer suppresses
+ * results. Negative or mixed preferences trigger a confirmation flag instead.
+ * Free-text negation is too ambiguous for a safe automatic veto.
  */
 export function hasNegatedPatternNeed(model, patternId) {
   const rule = PATTERN_BY_ID[patternId];
   if (!rule) return false;
-  return [model?.functionalNeed, model?.barrier]
-    .filter(Boolean)
-    .some((field) => containsClearRejectedNeed(field, rule.tokens));
+  return hasPreferenceConflict(model, rule.tokens);
 }
 
 export function hasSufficientContext(model) {
@@ -95,9 +88,9 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
 
   const ranked = patterns.map((pattern) => {
     const rule = PATTERN_BY_ID[pattern.id] || { tokens: [] };
-    const explicitlyNegated = hasNegatedPatternNeed(model, pattern.id);
-    const primary = explicitlyNegated ? 0 : overlapScore(query, rule.tokens);
-    const needsScore = explicitlyNegated ? 0 : overlapScore(model.functionalNeed, rule.tokens);
+    const preferenceConflict = hasPreferenceConflict(model, rule.tokens);
+    const primary = overlapScore(query, rule.tokens);
+    const needsScore = overlapScore(model.functionalNeed, rule.tokens);
     const approachText = [
       pattern.title,
       pattern.mechanism,
@@ -107,24 +100,22 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
     const ignoredTokens = new Set(["task", "work", "help", "need", "make", "difficult", "support", "person", "thing", "something", "unable"]);
     const meaningfulTokens = [...new Set(queryTokens)].filter((token) => token.length >= 4 && !ignoredTokens.has(token));
     const patternTokens = tokenize(approachText);
-    const supporting = explicitlyNegated ? 0 : meaningfulTokens.filter((token) =>
+    const supporting = meaningfulTokens.filter((token) =>
       patternTokens.some((candidate) => candidate === token || candidate.startsWith(token) || token.startsWith(candidate))
     ).length;
-    const contextMatches = explicitlyNegated ? 0 : inferredContexts.filter((context) =>
+    const contextMatches = inferredContexts.filter((context) =>
       (pattern.contexts || []).some((entry) => {
         const p = normalizedText(entry);
         return p.includes(context) || context.includes(p);
       })
     ).length;
     const score = primary * 3 + needsScore * 4 + Math.min(supporting, 6) + contextMatches * 2;
-    const hasMeaningfulMatch = !explicitlyNegated && (primary > 0 || needsScore > 0 || contextMatches > 0);
+    const hasMeaningfulMatch = primary > 0 || needsScore > 0 || contextMatches > 0;
     const reasons = [];
-    if (explicitlyNegated) reasons.push("The functional-need or barrier text appears to explicitly reject this type of support, so it was suppressed by a conservative negation guard.");
-    else {
-      if (needsScore > 0) reasons.push("The functional-need description overlaps with this pattern's focus.");
-      if (primary > 0) reasons.push("The task, barrier, or context contains terms associated with this pattern.");
-      if (contextMatches > 0) reasons.push("The inferred context overlaps with the pattern's documented contexts.");
-    }
+    if (needsScore > 0) reasons.push("The functional-need description overlaps with this pattern's focus.");
+    if (primary > 0) reasons.push("The task, barrier, or context contains terms associated with this pattern.");
+    if (contextMatches > 0) reasons.push("The inferred context overlaps with the pattern's documented contexts.");
+    if (preferenceConflict) reasons.push("This input includes possible rejection or mixed preference language. Confirm with the person before treating this option as suitable.");
     if (reasons.length === 0) reasons.push("No direct matching signal was found. Consider clarifying the barrier or reviewing this pattern manually.");
     const confidence = score >= 12 ? "strong lexical match" : score >= 5 ? "possible match" : "exploratory alternative";
     return {
@@ -132,9 +123,11 @@ export function matchAccommodationPatterns(model, patterns, options = {}) {
       score,
       confidence: hasMeaningfulMatch ? confidence : "exploratory alternative",
       hasMeaningfulMatch,
+      preferenceConflict,
+      requiresPreferenceConfirmation: preferenceConflict,
       reasons,
       contextMatches,
-      matchedTerms: explicitlyNegated ? [] : rule.tokens.filter((token) => normalizedText(query).includes(token))
+      matchedTerms: rule.tokens.filter((token) => normalizedText(query).includes(token))
     };
   }).sort((a, b) => b.score - a.score || a.pattern.id.localeCompare(b.pattern.id));
 
