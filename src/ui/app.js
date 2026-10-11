@@ -5,14 +5,35 @@ import { analyzeBarrierInput } from "../domain/barrier-analyzer.js";
 import { compileSolutionArtifacts } from "../domain/solution-compiler.js";
 import {
   escapeHtml,
+  caseCode,
+  renderStationHeading,
   renderOptions,
+  renderRouteSummary,
   renderClarifyingQuestions,
   renderCompiledArtifacts,
   renderResourceOptions,
   renderPatterns
 } from "./presentation.js";
 
-// Application State
+function readPref(key, fallback) {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePref(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Preferences still apply for this session.
+  }
+}
+
+const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+const prefersContrast = window.matchMedia?.("(prefers-contrast: more)").matches;
+
 const state = {
   currentCaseId: syntheticCases[0].id,
   isCustomMode: false,
@@ -35,13 +56,23 @@ const state = {
     jobTitle: "",
     trialDays: 30
   },
-  filterCategory: "all",
-  activeTab: "tab-letter",
-  theme: localStorage.getItem("vocspace-theme") || "light",
-  fontSize: localStorage.getItem("vocspace-font-size") || "normal"
+  activeTab: "letter",
+  theme: readPref("vocspace-theme", prefersContrast ? "high-contrast" : prefersDark ? "dark" : "light"),
+  fontSize: readPref("vocspace-font-size", "normal")
 };
 
+const STATIONS = [
+  { number: "01", label: "Barrier", href: "#station-barrier" },
+  { number: "02", label: "Need", href: "#station-need" },
+  { number: "03", label: "Options", href: "#station-options" },
+  { number: "04", label: "Connect", href: "#station-connect" },
+  { number: "05", label: "Plan", href: "#station-plan" }
+];
+
+const CHAIN = ["Barrier", "Functional need", "Options", "Solution", "Connection", "Implementation", "Validation"];
+
 const root = document.querySelector("#app");
+let stationObserver = null;
 
 function applyPreferences() {
   document.documentElement.setAttribute("data-theme", state.theme);
@@ -50,551 +81,436 @@ function applyPreferences() {
 
 function getCurrentModel() {
   if (state.isCustomMode) {
-    if (state.customAnalysis) {
-      return {
-        id: "custom-case",
-        title: state.customDraft.title || "Custom Workplace Scenario",
-        participationGoal: state.customDraft.participationGoal || state.customAnalysis.participationGoal,
-        task: state.customDraft.task || state.customAnalysis.task,
-        context: state.customDraft.context || state.customAnalysis.context,
-        barrier: state.customDraft.barrier || state.customAnalysis.barrier,
-        functionalNeed: state.customDraft.functionalNeed || state.customAnalysis.functionalNeed,
-        strengths: state.customDraft.strengths || [],
-        constraints: state.customDraft.constraints || [],
-        solutions: state.customAnalysis.candidateSolutions || []
-      };
-    }
+    const draft = state.customDraft;
+    const analysis = state.customAnalysis;
     return {
       id: "custom-case",
-      title: "Custom Barrier Analysis",
-      participationGoal: state.customDraft.participationGoal,
-      task: state.customDraft.task,
-      context: state.customDraft.context,
-      barrier: state.customDraft.barrier,
-      functionalNeed: state.customDraft.functionalNeed,
-      strengths: state.customDraft.strengths,
-      constraints: state.customDraft.constraints,
-      solutions: []
+      title: "Your own barrier",
+      participationGoal: draft.participationGoal || analysis?.participationGoal || "",
+      task: draft.task || analysis?.task || "",
+      context: draft.context || analysis?.context || "",
+      barrier: draft.barrier || analysis?.barrier || "",
+      functionalNeed: draft.functionalNeed || analysis?.functionalNeed || "",
+      strengths: draft.strengths || [],
+      constraints: draft.constraints || [],
+      solutions: analysis?.candidateSolutions || []
     };
   }
   return syntheticCases.find((c) => c.id === state.currentCaseId) || syntheticCases[0];
 }
 
+function routeResourceIds(model) {
+  const solutions = model.solutions || [];
+  const onRoute = solutions.filter((s) => state.selectedSolutionIds.includes(s.id));
+  return [...new Set(onRoute.flatMap((s) => s.resourceCategories || []))];
+}
+
+function announce(message) {
+  const region = document.querySelector("#route-status");
+  if (region) region.textContent = message;
+}
+
+function selectionText() {
+  const n = state.selectedSolutionIds.length;
+  return n === 0 ? "No options on your route yet" : `${n} option${n === 1 ? "" : "s"} on your route`;
+}
+
+function renderPrefGroup(label, name, current, choices) {
+  return `
+    <div class="pref-group" role="group" aria-label="${label}">
+      <span class="pref-label" aria-hidden="true">${label}</span>
+      ${choices.map(([value, text]) => `
+        <button type="button" class="pref-btn" id="pref-${name}-${value}" data-pref="${name}" data-value="${value}" aria-pressed="${current === value}">${text}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderField({ id, name, label, value, hint, required = false, multiline = false, rows = 2, placeholder = "", wide = false }) {
+  const hintId = `${id}-hint`;
+  const common = `id="${id}" name="${name}" aria-describedby="${hintId}" ${required ? "required" : ""} placeholder="${escapeHtml(placeholder)}"`;
+  return `
+    <div class="field ${wide ? "field-wide" : ""}">
+      <label for="${id}">${label}${required ? "" : ` <span class="optional">optional</span>`}</label>
+      <span class="field-hint" id="${hintId}">${hint}</span>
+      ${multiline
+        ? `<textarea ${common} rows="${rows}">${escapeHtml(value)}</textarea>`
+        : `<input type="text" ${common} value="${escapeHtml(value)}">`}
+    </div>
+  `;
+}
+
 function render() {
   if (!root) return;
+  const focusedId = document.activeElement?.id;
   applyPreferences();
 
-  const currentModel = getCurrentModel();
-  const solutions = currentModel.solutions || [];
-  const clarifyingQuestions = state.isCustomMode && state.customAnalysis 
-    ? state.customAnalysis.clarifyingQuestions 
-    : [];
+  const model = getCurrentModel();
+  const solutions = model.solutions || [];
+  const questions = state.isCustomMode && state.customAnalysis ? state.customAnalysis.clarifyingQuestions : [];
 
   root.innerHTML = `
-    <!-- Top Access & Theme Bar -->
-    <header class="app-header" role="banner">
-      <div class="header-inner">
-        <div class="brand">
-          <span class="brand-logo" aria-hidden="true">◬</span>
-          <div>
-            <span class="brand-title">VocSpace</span>
-            <span class="brand-subtitle">Accessibility & Accommodation Intelligence</span>
-          </div>
-        </div>
-        <nav class="quick-nav" aria-label="Main Navigation">
-          <a href="#intake-surface" class="nav-link">1. Barrier Intake</a>
-          <a href="#solutions-surface" class="nav-link">2. Pathways</a>
-          <a href="#compiler-surface" class="nav-link">3. Solution Compiler</a>
-          <a href="#resources-surface" class="nav-link">4. Resources</a>
-          <a href="#patterns-surface" class="nav-link">5. Patterns</a>
+    <header class="signage" role="banner">
+      <div class="signage-inner">
+        <a class="wordmark" href="#main">
+          <span class="wordmark-glyph" aria-hidden="true"></span>VocSpace
+        </a>
+        <nav class="route-strip" aria-label="Route">
+          <ol>
+            ${STATIONS.map((s) => `
+              <li><a href="${s.href}" data-station="${s.href.slice(1)}"><span class="strip-num" aria-hidden="true">${s.number}</span>${s.label}</a></li>
+            `).join("")}
+            <li class="strip-appendix"><a href="#station-patterns" data-station="station-patterns">Patterns</a></li>
+          </ol>
         </nav>
-        <div class="a11y-controls" aria-label="Accessibility settings">
-          <button id="theme-toggle" class="ctrl-btn" type="button" aria-label="Toggle Theme: ${state.theme}">
-            ${state.theme === "dark" ? "☀️ Light" : state.theme === "high-contrast" ? "🌓 Standard" : "🌙 Dark"}
-          </button>
-          <button id="contrast-toggle" class="ctrl-btn" type="button" aria-label="Toggle High Contrast">
-            ${state.theme === "high-contrast" ? "Regular Contrast" : "⚡ High Contrast"}
-          </button>
-          <button id="font-toggle" class="ctrl-btn" type="button" aria-label="Toggle Font Size: ${state.fontSize}">
-            ${state.fontSize === "large" ? "A- Font" : "A+ Font"}
-          </button>
+        <div class="prefs">
+          ${renderPrefGroup("Theme", "theme", state.theme, [["light", "Light"], ["dark", "Dark"], ["high-contrast", "High contrast"]])}
+          ${renderPrefGroup("Text", "font", state.fontSize, [["normal", "Standard"], ["large", "Large"]])}
         </div>
       </div>
     </header>
 
-    <!-- Hero / Principles Statement -->
-    <section class="hero" aria-labelledby="hero-title">
-      <p class="eyebrow">VOCSPACE · OPEN ACCESSIBILITY & ACCOMMODATION INTELLIGENCE</p>
-      <h1 id="hero-title">From Barriers to Possibilities.</h1>
-      <p class="hero-tagline">
-        Most systems start with a diagnosis. VocSpace begins with the <strong>barrier</strong>.
-        We disentangle what a person is trying to achieve from environmental friction, compare multiple evidence-based pathways, and compile legally sound implementation artifacts.
-      </p>
-      <div class="notice" role="note">
-        <strong>Privacy & Clinical Boundary:</strong> VocSpace does not require medical diagnoses, disability labels, or private health records. All reasoning operates on functional barriers and tasks. All draft text stays in your local browser session.
-      </div>
-    </section>
+    <main class="page" id="main" tabindex="-1">
+      <section class="intro" aria-labelledby="intro-title">
+        <p class="kicker">Accessibility and accommodation intelligence</p>
+        <h1 id="intro-title">Begin with the barrier.</h1>
+        <p class="intro-lede">
+          Most systems start with a diagnosis and work backwards to a device. VocSpace starts with what someone is trying to do
+          and what gets in the way, then lays out more than one route forward.
+        </p>
+        <ol class="chain" aria-label="The VocSpace model">
+          ${CHAIN.map((c) => `<li>${c}</li>`).join("")}
+        </ol>
+        <p class="notice notice-privacy">
+          <strong>No diagnosis needed.</strong> VocSpace reasons about tasks and barriers, not medical labels.
+          Everything you type stays in this browser tab. The cases below are synthetic.
+        </p>
+      </section>
 
-    <!-- SURFACE 1: BARRIER EXPLORER & INTAKE STUDIO -->
-    <section class="panel" id="intake-surface" aria-labelledby="intake-title">
-      <div class="panel-header">
-        <div>
-          <span class="panel-step">Step 1</span>
-          <h2 id="intake-title">Barrier Intake & Functional Reframing</h2>
-          <p class="panel-desc">Select a vetted synthetic scenario or describe any workplace, educational, or digital barrier.</p>
-        </div>
-      </div>
+      <div class="line">
+        <section class="station" id="station-barrier" aria-labelledby="barrier-title">
+          ${renderStationHeading({ number: "01", label: "Barrier", id: "barrier-title", title: "What gets in the way?", desc: "Start from a synthetic case, or describe a barrier of your own." })}
 
-      <!-- Mode Selector -->
-      <div class="intake-mode-bar" role="radiogroup" aria-label="Intake source mode">
-        <button type="button" class="mode-tab ${!state.isCustomMode ? 'active' : ''}" id="mode-curated">
-          📁 Curated Synthetic Cases (${syntheticCases.length})
-        </button>
-        <button type="button" class="mode-tab ${state.isCustomMode ? 'active' : ''}" id="mode-custom">
-          ✨ Describe Any Barrier (Dynamic Analysis)
-        </button>
-      </div>
+          <fieldset class="case-picker">
+            <legend>Starting point</legend>
+            <ul class="case-list">
+              ${syntheticCases.map((c) => `
+                <li>
+                  <input type="radio" name="case" id="case-${escapeHtml(c.id)}" value="${escapeHtml(c.id)}" ${!state.isCustomMode && c.id === state.currentCaseId ? "checked" : ""}>
+                  <label for="case-${escapeHtml(c.id)}"><span class="case-code">${caseCode(c.id)}</span>${escapeHtml(c.title)}</label>
+                </li>
+              `).join("")}
+              <li class="case-own">
+                <input type="radio" name="case" id="case-custom" value="custom" ${state.isCustomMode ? "checked" : ""}>
+                <label for="case-custom"><span class="case-code">+</span>Describe your own barrier</label>
+              </li>
+            </ul>
+          </fieldset>
 
-      ${!state.isCustomMode ? `
-        <!-- Curated Case Picker -->
-        <div class="case-selection-box">
-          <label for="case-select">Select a Curated Synthetic Scenario:</label>
-          <select id="case-select" class="styled-select">
-            ${syntheticCases.map((c) => `
-              <option value="${escapeHtml(c.id)}" ${c.id === currentModel.id ? "selected" : ""}>
-                ${escapeHtml(c.title)} (${escapeHtml(c.id)})
-              </option>
-            `).join("")}
-          </select>
-        </div>
-      ` : `
-        <div class="custom-prompt-banner">
-          <p>💡 <strong>Free-Form Barrier Intelligence:</strong> Enter a barrier below. VocSpace will analyze domain keywords, extract an objective functional need, suggest clarifying questions, and match accommodation patterns from our knowledge base.</p>
-        </div>
-      `}
+          <form id="barrier-form" class="barrier-form">
+            <div class="field-grid">
+              ${renderField({ id: "goal", name: "goal", label: "Participation goal", value: model.participationGoal, hint: "The activity or responsibility the person is trying to carry out.", required: true, wide: true, placeholder: "Complete administrative reports independently" })}
+              ${renderField({ id: "task", name: "task", label: "Task", value: model.task, hint: "The concrete action where difficulty shows up.", required: true, placeholder: "Review spreadsheets for several hours" })}
+              ${renderField({ id: "context", name: "context", label: "Context", value: model.context, hint: "Physical, social, digital or procedural conditions.", required: true, placeholder: "Open-plan office, fluorescent lighting" })}
+              ${renderField({ id: "barrier", name: "barrier", label: "Barrier", value: model.barrier, hint: "What gets in the way, described as friction, not as a condition.", required: true, multiline: true, rows: 3, wide: true })}
+              ${renderField({ id: "need", name: "need", label: "Functional need", value: model.functionalNeed, hint: state.isCustomMode ? "Leave blank and VocSpace will propose one." : "The capability or condition that would remove the friction.", multiline: true, wide: true, required: !state.isCustomMode })}
+              ${renderField({ id: "strengths", name: "strengths", label: "Strengths", value: (model.strengths || []).join("; "), hint: "Separate with semicolons." })}
+              ${renderField({ id: "constraints", name: "constraints", label: "Constraints", value: (model.constraints || []).join("; "), hint: "Separate with semicolons." })}
+            </div>
+            <button type="submit" class="btn btn-primary" id="analyze-btn">
+              ${state.isCustomMode ? "Analyse barrier and find options" : "Update the route"}
+            </button>
+          </form>
+        </section>
 
-      <!-- Barrier Intake Form -->
-      <form id="barrier-form" class="barrier-form">
-        <div class="form-grid">
-          <div class="form-group full-width">
-            <label for="goal">Participation Goal <span class="req">*</span></label>
-            <input type="text" id="goal" name="goal" required value="${escapeHtml(currentModel.participationGoal)}" placeholder="e.g. Complete administrative reports and data auditing independently.">
-            <span class="field-hint">What meaningful activity or responsibility is the person trying to accomplish?</span>
+        <section class="station" id="station-need" aria-labelledby="need-title">
+          ${renderStationHeading({ number: "02", label: "Functional need", id: "need-title", title: "The route so far", desc: "The barrier, reframed as a need that options can be measured against." })}
+          ${renderRouteSummary(model)}
+          ${renderClarifyingQuestions(questions)}
+        </section>
+
+        <section class="station" id="station-options" aria-labelledby="options-title">
+          ${renderStationHeading({ number: "03", label: "Options", id: "options-title", title: "Compare routes forward", desc: "Each option is coloured by mechanism. Add one or more to your route." })}
+          <ul class="legend" aria-label="Mechanism colours">
+            <li class="line-digital">Digital</li>
+            <li class="line-environmental">Environmental</li>
+            <li class="line-organizational">Process / policy</li>
+            <li class="line-physical">Physical</li>
+            <li class="line-assistive">Assistive tech</li>
+          </ul>
+          ${renderOptions(solutions, state.selectedSolutionIds)}
+          <div class="route-bar">
+            <p id="route-count">${selectionText()}</p>
+            <button type="button" class="btn btn-primary" id="trigger-compile-btn" ${solutions.length === 0 ? "disabled" : ""}>Build the plan</button>
           </div>
+        </section>
 
-          <div class="form-group">
-            <label for="task">Specific Task Blocked <span class="req">*</span></label>
-            <input type="text" id="task" name="task" required value="${escapeHtml(currentModel.task)}" placeholder="e.g. Review spreadsheets on dual monitors for 6 continuous hours.">
-            <span class="field-hint">The concrete action or duty where difficulty is encountered.</span>
+        <section class="station" id="station-connect" aria-labelledby="connect-title">
+          ${renderStationHeading({ number: "04", label: "Connection", id: "connect-title", title: "Who can help", desc: "Resources are matched by capability to the options on your route." })}
+          <div id="resource-root">${renderResourceOptions(resourceCategories, routeResourceIds(model))}</div>
+        </section>
+
+        <section class="station" id="station-plan" aria-labelledby="plan-title">
+          ${renderStationHeading({ number: "05", label: "Implementation and validation", id: "plan-title", title: "The plan", desc: "Four drafts generated from your route: a request letter, a technical spec, a checklist and a validation protocol. A person reviews each before use." })}
+          <form class="plan-details" id="plan-details">
+            <fieldset>
+              <legend>Details for the drafts <span class="optional">optional</span></legend>
+              <div class="field-grid field-grid-4">
+                <div class="field"><label for="meta-worker">Person's name</label><input type="text" id="meta-worker" value="${escapeHtml(state.metaOptions.workerName)}" autocomplete="off"></div>
+                <div class="field"><label for="meta-recipient">Recipient</label><input type="text" id="meta-recipient" value="${escapeHtml(state.metaOptions.recipientName)}" autocomplete="off"></div>
+                <div class="field"><label for="meta-job">Role</label><input type="text" id="meta-job" value="${escapeHtml(state.metaOptions.jobTitle)}" autocomplete="off"></div>
+                <div class="field"><label for="meta-days">Trial length (days)</label><input type="number" id="meta-days" min="7" max="180" value="${state.metaOptions.trialDays}"></div>
+              </div>
+            </fieldset>
+            <button type="submit" class="btn btn-secondary" id="refresh-compile-btn" ${solutions.length === 0 ? "disabled" : ""}>
+              ${state.compiledArtifacts ? "Rebuild with these details" : "Build the plan"}
+            </button>
+          </form>
+          <div id="compiler-output-root">
+            ${state.compiledArtifacts
+              ? renderCompiledArtifacts(state.compiledArtifacts, state.activeTab)
+              : `<p class="empty-state">No plan yet. Add options to your route at station 03, then build the plan. With none chosen, the first two options are used.</p>`}
           </div>
-
-          <div class="form-group">
-            <label for="context">Environment & Context <span class="req">*</span></label>
-            <input type="text" id="context" name="context" required value="${escapeHtml(currentModel.context)}" placeholder="e.g. Open-plan corporate cubicle with fluorescent overhead troffers.">
-            <span class="field-hint">Physical, social, digital, or procedural operating conditions.</span>
-          </div>
-
-          <div class="form-group full-width">
-            <label for="barrier">Observed Barrier / Friction <span class="req">*</span></label>
-            <textarea id="barrier" name="barrier" rows="3" required placeholder="Describe what gets in the way without using diagnostic or medical labels...">${escapeHtml(currentModel.barrier)}</textarea>
-            <span class="field-hint">Focus on environmental friction and observed difficulty, not medical conditions.</span>
-          </div>
-
-          <div class="form-group full-width">
-            <label for="need">Functional Need (Reframed Support Requirement) <span class="req">*</span></label>
-            <textarea id="need" name="need" rows="2" required placeholder="What functional capability or accommodation would eliminate the friction?">${escapeHtml(currentModel.functionalNeed)}</textarea>
-            <span class="field-hint">What capability, adaptation, or condition enables successful task execution?</span>
-          </div>
-
-          <div class="form-group">
-            <label for="strengths">Existing Strengths & Strategies</label>
-            <input type="text" id="strengths" name="strengths" value="${escapeHtml((currentModel.strengths || []).join("; "))}" placeholder="e.g. Strong data skills; uses written checklists">
-            <span class="field-hint">Strategies or conditions under which the person already thrives.</span>
-          </div>
-
-          <div class="form-group">
-            <label for="constraints">Operational Constraints</label>
-            <input type="text" id="constraints" name="constraints" value="${escapeHtml((currentModel.constraints || []).join("; "))}" placeholder="e.g. Must preserve coworker comfort; strict data security">
-            <span class="field-hint">Workplace or technical boundaries that must be respected.</span>
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button type="submit" class="btn-primary" id="analyze-btn">
-            ${state.isCustomMode ? "🔍 Run Barrier Intelligence & Match Pathways" : "🔄 Update Functional Model"}
-          </button>
-        </div>
-      </form>
-
-      ${renderClarifyingQuestions(clarifyingQuestions)}
-
-      <!-- Functional Model Decomposition Summary -->
-      <div class="model-summary-box" aria-live="polite">
-        <div class="summary-top">
-          <span class="status-indicator" aria-hidden="true">●</span>
-          <h3>Active Functional Model</h3>
-        </div>
-        <dl class="functional-model-grid">
-          <dt>Goal:</dt>
-          <dd>${escapeHtml(currentModel.participationGoal || "Not specified")}</dd>
-          <dt>Task:</dt>
-          <dd>${escapeHtml(currentModel.task || "Not specified")}</dd>
-          <dt>Context:</dt>
-          <dd>${escapeHtml(currentModel.context || "Not specified")}</dd>
-          <dt>Barrier:</dt>
-          <dd>${escapeHtml(currentModel.barrier || "Not specified")}</dd>
-          <dt>Functional Need:</dt>
-          <dd class="highlight-need">${escapeHtml(currentModel.functionalNeed || "Not specified")}</dd>
-          <dt>Strengths:</dt>
-          <dd>${escapeHtml((currentModel.strengths || []).join("; ") || "None listed")}</dd>
-          <dt>Constraints:</dt>
-          <dd>${escapeHtml((currentModel.constraints || []).join("; ") || "None listed")}</dd>
-        </dl>
-      </div>
-    </section>
-
-    <!-- SURFACE 2: MULTI-PATHWAY SOLUTION MATRIX -->
-    <section class="panel" id="solutions-surface" aria-labelledby="solutions-title">
-      <div class="panel-header">
-        <div>
-          <span class="panel-step">Step 2</span>
-          <h2 id="solutions-title">Compare Solution Pathways</h2>
-          <p class="panel-desc">
-            VocSpace presents multiple intervention mechanisms (Digital, Environmental, Process, Physical).
-            Compare tradeoffs and select one or more pathways to compile actionable artifacts.
-          </p>
-        </div>
+        </section>
       </div>
 
-      <div class="selection-action-bar">
-        <span class="selection-counter" id="selection-counter">
-          <strong>${state.selectedSolutionIds.length}</strong> option(s) selected for action plan
-        </span>
-        <button type="button" class="btn-action" id="trigger-compile-btn" ${solutions.length === 0 ? 'disabled' : ''}>
-          ⚙️ Compile Solution Artifacts & Action Plan
-        </button>
-      </div>
-
-      <div class="solution-grid" id="solutions-container">
-        ${renderOptions(solutions, state.selectedSolutionIds)}
-      </div>
-    </section>
-
-    <!-- SURFACE 3: THE SOLUTION COMPILER STUDIO (PHASE 4) -->
-    <section class="panel" id="compiler-surface" aria-labelledby="compiler-title">
-      <div class="panel-header">
-        <div>
-          <span class="panel-step">Step 3</span>
-          <h2 id="compiler-title">Solution Compiler Studio</h2>
-          <p class="panel-desc">
-            Turns selected pathways into four production-ready artifacts: an ADA request letter, an AI coding prompt, an implementation checklist, and a longitudinal outcome protocol.
-          </p>
-        </div>
-      </div>
-
-      <!-- Optional Metadata Configuration for Customization -->
-      <div class="compiler-meta-config">
-        <h4>Customize Compiled Artifacts (Optional)</h4>
-        <div class="meta-grid">
-          <div class="meta-field">
-            <label for="meta-worker">Worker / Student Name:</label>
-            <input type="text" id="meta-worker" value="${escapeHtml(state.metaOptions.workerName)}" placeholder="e.g. Alex Rivera">
-          </div>
-          <div class="meta-field">
-            <label for="meta-recipient">Recipient / HR / Supervisor:</label>
-            <input type="text" id="meta-recipient" value="${escapeHtml(state.metaOptions.recipientName)}" placeholder="e.g. Jordan Smith (HR)">
-          </div>
-          <div class="meta-field">
-            <label for="meta-job">Role / Job Title:</label>
-            <input type="text" id="meta-job" value="${escapeHtml(state.metaOptions.jobTitle)}" placeholder="e.g. Senior Financial Analyst">
-          </div>
-          <div class="meta-field">
-            <label for="meta-days">Trial Duration (Days):</label>
-            <input type="number" id="meta-days" min="7" max="180" value="${state.metaOptions.trialDays}">
-          </div>
-        </div>
-        <button type="button" class="btn-secondary" id="refresh-compile-btn">🔄 Re-compile Artifacts with Details</button>
-      </div>
-
-      <div id="compiler-output-root">
-        ${state.compiledArtifacts ? renderCompiledArtifacts(state.compiledArtifacts) : `
-          <div class="compiler-placeholder">
-            <p>Select one or more solution pathways above and click <strong>"Compile Solution Artifacts"</strong> to generate your documents.</p>
-          </div>
-        `}
-      </div>
-    </section>
-
-    <!-- SURFACE 4: RESOURCE ROUTER & ECOSYSTEM -->
-    <section class="panel" id="resources-surface" aria-labelledby="resources-title">
-      <div class="panel-header">
-        <div>
-          <span class="panel-step">Surface 4</span>
-          <h2 id="resources-title">Resource Routing Ecosystem</h2>
-          <p class="panel-desc">
-            VocSpace routes cases based on structured capabilities rather than arbitrary directories.
-          </p>
-        </div>
-      </div>
-      <ul class="resource-grid">
-        ${renderResourceOptions(resourceCategories)}
-      </ul>
-    </section>
-
-    <!-- SURFACE 5: ACCOMMODATION PATTERN LIBRARY (FOUNDRY) -->
-    <section class="panel" id="patterns-surface" aria-labelledby="patterns-title">
-      <div class="panel-header">
-        <div>
-          <span class="panel-step">Surface 5</span>
-          <h2 id="patterns-title">Accommodation Pattern Library (${accommodationPatterns.length} Patterns)</h2>
-          <p class="panel-desc">
-            Modular accommodation primitives indexed by functional need, context, mechanism, and verification ideas.
-          </p>
-        </div>
-      </div>
-      <div class="pattern-grid">
+      <section class="appendix" id="station-patterns" aria-labelledby="patterns-title">
+        <p class="station-label">Appendix</p>
+        <h2 id="patterns-title">Accommodation pattern catalogue</h2>
+        <p class="station-desc">${accommodationPatterns.length} reusable patterns indexed by functional need. Draft synthesis means VocSpace wrote it and no external source has reviewed it yet.</p>
         ${renderPatterns(accommodationPatterns)}
-      </div>
-    </section>
+      </section>
+    </main>
 
-    <!-- Footer -->
-    <footer class="app-footer" role="contentinfo">
-      <div class="footer-inner">
-        <p><strong>VocSpace:</strong> From Barriers to Possibilities. Designed with human judgment, privacy by design, and accessibility by default.</p>
-        <p>Zero tracking · Offline capable · Local-first execution</p>
-      </div>
+    <footer class="colophon" role="contentinfo">
+      <p><strong>VocSpace</strong> · Barrier-first. Human judgment stays central. No tracking; runs locally.</p>
+      <p>A research prototype, not a clinical, legal or safety determination.</p>
     </footer>
+
+    <p class="visually-hidden" role="status" aria-live="polite" id="route-status"></p>
   `;
 
   attachEventHandlers();
+  observeStations();
+
+  if (focusedId) document.getElementById(focusedId)?.focus();
+}
+
+function observeStations() {
+  stationObserver?.disconnect();
+  if (!("IntersectionObserver" in window)) return;
+  const links = [...document.querySelectorAll(".route-strip a")];
+  stationObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      links.forEach((a) => {
+        if (a.dataset.station === entry.target.id) a.setAttribute("aria-current", "step");
+        else a.removeAttribute("aria-current");
+      });
+    });
+  }, { rootMargin: "-30% 0px -60% 0px" });
+  document.querySelectorAll(".station, .appendix").forEach((s) => stationObserver.observe(s));
+}
+
+function resetRoute() {
+  state.selectedSolutionIds = [];
+  state.compiledArtifacts = null;
+}
+
+function runCompiler() {
+  const model = getCurrentModel();
+  const solutions = model.solutions || [];
+  const selected = solutions.filter((s) => state.selectedSolutionIds.includes(s.id));
+  const effective = selected.length > 0 ? selected : solutions.slice(0, 2);
+  if (effective.length === 0) return;
+
+  state.metaOptions.workerName = document.querySelector("#meta-worker")?.value ?? state.metaOptions.workerName;
+  state.metaOptions.recipientName = document.querySelector("#meta-recipient")?.value ?? state.metaOptions.recipientName;
+  state.metaOptions.jobTitle = document.querySelector("#meta-job")?.value ?? state.metaOptions.jobTitle;
+  state.metaOptions.trialDays = Number(document.querySelector("#meta-days")?.value || state.metaOptions.trialDays);
+
+  state.compiledArtifacts = compileSolutionArtifacts(model, effective, state.metaOptions).artifacts;
+
+  const output = document.querySelector("#compiler-output-root");
+  if (!output) return;
+  output.innerHTML = renderCompiledArtifacts(state.compiledArtifacts, state.activeTab);
+  const refresh = document.querySelector("#refresh-compile-btn");
+  if (refresh) refresh.textContent = "Rebuild with these details";
+  attachDocumentHandlers();
+
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  document.querySelector("#station-plan")?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  document.querySelector(`#tab-btn-${state.activeTab}`)?.focus({ preventScroll: true });
+  announce(`Plan built from ${effective.length} option${effective.length === 1 ? "" : "s"}. Four drafts are ready.`);
 }
 
 function attachEventHandlers() {
-  // Theme & Contrast Toggles
-  document.querySelector("#theme-toggle")?.addEventListener("click", () => {
-    state.theme = state.theme === "dark" ? "light" : "dark";
-    localStorage.setItem("vocspace-theme", state.theme);
-    render();
+  document.querySelectorAll(".pref-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const { pref, value } = btn.dataset;
+      if (pref === "theme") {
+        state.theme = value;
+        writePref("vocspace-theme", value);
+      } else {
+        state.fontSize = value;
+        writePref("vocspace-font-size", value);
+      }
+      render();
+    });
   });
 
-  document.querySelector("#contrast-toggle")?.addEventListener("click", () => {
-    state.theme = state.theme === "high-contrast" ? "light" : "high-contrast";
-    localStorage.setItem("vocspace-theme", state.theme);
-    render();
+  document.querySelectorAll('input[name="case"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      resetRoute();
+      if (radio.value === "custom") {
+        state.isCustomMode = true;
+        if (!state.customAnalysis) {
+          state.customAnalysis = analyzeBarrierInput({
+            barrier: "Frequent interruptions and dense interfaces make it hard to stay on task.",
+            task: "Administrative reporting and communication",
+            context: "Open office environment",
+            goal: "Complete daily assignments on schedule"
+          });
+          Object.assign(state.customDraft, {
+            participationGoal: state.customAnalysis.participationGoal,
+            task: state.customAnalysis.task,
+            context: state.customAnalysis.context,
+            barrier: state.customAnalysis.barrier,
+            functionalNeed: state.customAnalysis.functionalNeed
+          });
+        }
+      } else {
+        state.isCustomMode = false;
+        state.currentCaseId = radio.value;
+      }
+      render();
+      announce(`Starting point changed to ${getCurrentModel().title}. Route cleared.`);
+    });
   });
 
-  document.querySelector("#font-toggle")?.addEventListener("click", () => {
-    state.fontSize = state.fontSize === "large" ? "normal" : "large";
-    localStorage.setItem("vocspace-font-size", state.fontSize);
-    render();
-  });
-
-  // Mode Selection
-  document.querySelector("#mode-curated")?.addEventListener("click", () => {
-    state.isCustomMode = false;
-    state.selectedSolutionIds = [];
-    state.compiledArtifacts = null;
-    render();
-  });
-
-  document.querySelector("#mode-custom")?.addEventListener("click", () => {
-    state.isCustomMode = true;
-    state.selectedSolutionIds = [];
-    state.compiledArtifacts = null;
-    if (!state.customAnalysis) {
-      // Run initial analysis with empty or default prompt
-      state.customAnalysis = analyzeBarrierInput({
-        barrier: state.customDraft.barrier || "Excessive interruptions and dense interfaces cause task derailment.",
-        task: state.customDraft.task || "Administrative reporting and communication",
-        context: state.customDraft.context || "Open office environment",
-        goal: state.customDraft.participationGoal || "Complete daily assignments on schedule"
-      });
-      state.customDraft.barrier = state.customAnalysis.barrier;
-      state.customDraft.functionalNeed = state.customAnalysis.functionalNeed;
-      state.customDraft.task = state.customAnalysis.task;
-      state.customDraft.context = state.customAnalysis.context;
-      state.customDraft.participationGoal = state.customAnalysis.participationGoal;
-    }
-    render();
-  });
-
-  // Case Select Dropdown
-  document.querySelector("#case-select")?.addEventListener("change", (e) => {
-    state.currentCaseId = e.target.value;
-    state.selectedSolutionIds = [];
-    state.compiledArtifacts = null;
-    render();
-  });
-
-  // Barrier Form Submit (Update or Analyze)
   document.querySelector("#barrier-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const goal = String(form.get("goal") || "").trim();
-    const task = String(form.get("task") || "").trim();
-    const context = String(form.get("context") || "").trim();
-    const barrier = String(form.get("barrier") || "").trim();
-    const need = String(form.get("need") || "").trim();
-    const strengths = String(form.get("strengths") || "").split(";").map((s) => s.trim()).filter(Boolean);
-    const constraints = String(form.get("constraints") || "").split(";").map((s) => s.trim()).filter(Boolean);
+    const text = (key) => String(form.get(key) || "").trim();
+    const list = (key) => text(key).split(";").map((s) => s.trim()).filter(Boolean);
+    const fields = {
+      participationGoal: text("goal"),
+      task: text("task"),
+      context: text("context"),
+      barrier: text("barrier"),
+      functionalNeed: text("need"),
+      strengths: list("strengths"),
+      constraints: list("constraints")
+    };
 
     if (state.isCustomMode) {
-      state.customDraft = {
-        title: "Custom Scenario",
-        participationGoal: goal,
-        task,
-        context,
-        barrier,
-        functionalNeed: need,
-        strengths,
-        constraints
-      };
       state.customAnalysis = analyzeBarrierInput({
-        barrier,
-        task,
-        context,
-        goal,
-        strengths,
-        constraints
+        barrier: fields.barrier,
+        task: fields.task,
+        context: fields.context,
+        goal: fields.participationGoal,
+        strengths: fields.strengths,
+        constraints: fields.constraints
       });
-      if (need) {
-        state.customAnalysis.functionalNeed = need;
-      }
-      state.selectedSolutionIds = [];
-      state.compiledArtifacts = null;
+      if (fields.functionalNeed) state.customAnalysis.functionalNeed = fields.functionalNeed;
+      state.customDraft = { title: "Custom Scenario", ...fields, functionalNeed: state.customAnalysis.functionalNeed };
+      resetRoute();
       render();
+      announce(`Analysis complete. ${state.customAnalysis.candidateSolutions.length} options found.`);
     } else {
       const current = syntheticCases.find((c) => c.id === state.currentCaseId);
-      if (current) {
-        current.participationGoal = goal;
-        current.task = task;
-        current.context = context;
-        current.barrier = barrier;
-        current.functionalNeed = need;
-        current.strengths = strengths;
-        current.constraints = constraints;
-      }
+      if (current) Object.assign(current, fields);
       render();
+      announce("Route updated.");
     }
   });
 
-  // Checkbox Solution Selection
   document.querySelectorAll('input[name="selectedSolution"]').forEach((checkbox) => {
-    checkbox.addEventListener("change", (e) => {
-      const solId = e.target.value;
-      if (e.target.checked) {
-        if (!state.selectedSolutionIds.includes(solId)) {
-          state.selectedSolutionIds.push(solId);
-        }
-      } else {
-        state.selectedSolutionIds = state.selectedSolutionIds.filter((id) => id !== solId);
-      }
-      const counter = document.querySelector("#selection-counter");
-      if (counter) {
-        counter.innerHTML = `<strong>${state.selectedSolutionIds.length}</strong> option(s) selected for action plan`;
-      }
-      const card = document.querySelector(`#card-${solId}`);
-      if (card) {
-        card.classList.toggle("is-selected", e.target.checked);
-      }
+    checkbox.addEventListener("change", () => {
+      const id = checkbox.value;
+      state.selectedSolutionIds = checkbox.checked
+        ? [...new Set([...state.selectedSolutionIds, id])]
+        : state.selectedSolutionIds.filter((s) => s !== id);
+
+      document.querySelector(`#card-${CSS.escape(id)}`)?.classList.toggle("is-selected", checkbox.checked);
+      const count = document.querySelector("#route-count");
+      if (count) count.textContent = selectionText();
+      const resources = document.querySelector("#resource-root");
+      if (resources) resources.innerHTML = renderResourceOptions(resourceCategories, routeResourceIds(getCurrentModel()));
+      announce(selectionText());
     });
   });
-
-  // Solution Compiler Trigger
-  function runCompiler() {
-    const model = getCurrentModel();
-    const selected = (model.solutions || []).filter((s) => state.selectedSolutionIds.includes(s.id));
-    const effectiveSolutions = selected.length > 0 ? selected : (model.solutions || []).slice(0, 2);
-
-    state.metaOptions.workerName = document.querySelector("#meta-worker")?.value || state.metaOptions.workerName;
-    state.metaOptions.recipientName = document.querySelector("#meta-recipient")?.value || state.metaOptions.recipientName;
-    state.metaOptions.jobTitle = document.querySelector("#meta-job")?.value || state.metaOptions.jobTitle;
-    state.metaOptions.trialDays = Number(document.querySelector("#meta-days")?.value || state.metaOptions.trialDays);
-
-    const compiled = compileSolutionArtifacts(model, effectiveSolutions, state.metaOptions);
-    state.compiledArtifacts = compiled.artifacts;
-
-    const outputRoot = document.querySelector("#compiler-output-root");
-    if (outputRoot) {
-      outputRoot.innerHTML = renderCompiledArtifacts(state.compiledArtifacts);
-      attachCompilerTabHandlers();
-      document.querySelector("#compiler-surface")?.scrollIntoView({ behavior: "smooth" });
-    }
-  }
 
   document.querySelector("#trigger-compile-btn")?.addEventListener("click", runCompiler);
-  document.querySelector("#refresh-compile-btn")?.addEventListener("click", runCompiler);
+  document.querySelector("#plan-details")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    runCompiler();
+  });
 
-  attachCompilerTabHandlers();
+  attachDocumentHandlers();
 }
 
-function attachCompilerTabHandlers() {
-  // Tabs switching
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      const tabId = e.currentTarget.getAttribute("data-tab");
-      document.querySelectorAll(".tab-btn").forEach((b) => {
-        b.classList.remove("active");
-        b.setAttribute("aria-selected", "false");
-      });
-      document.querySelectorAll(".tab-panel").forEach((panel) => {
-        panel.classList.remove("active");
-        panel.hidden = true;
-      });
+function activateTab(btn, { focus = true } = {}) {
+  const key = btn.dataset.tab;
+  state.activeTab = key;
+  document.querySelectorAll(".doc-tabs .tab-btn").forEach((b) => {
+    const isActive = b === btn;
+    b.setAttribute("aria-selected", String(isActive));
+    b.tabIndex = isActive ? 0 : -1;
+  });
+  document.querySelectorAll(".document .tab-panel").forEach((panel) => {
+    panel.hidden = panel.id !== `tab-${key}`;
+  });
+  if (focus) btn.focus();
+}
 
-      e.currentTarget.classList.add("active");
-      e.currentTarget.setAttribute("aria-selected", "true");
-      const targetPanel = document.querySelector(`#${tabId}`);
-      if (targetPanel) {
-        targetPanel.classList.add("active");
-        targetPanel.hidden = false;
-      }
+function attachDocumentHandlers() {
+  const tabs = [...document.querySelectorAll(".doc-tabs .tab-btn")];
+  tabs.forEach((btn, i) => {
+    btn.addEventListener("click", () => activateTab(btn));
+    btn.addEventListener("keydown", (e) => {
+      const moves = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 };
+      if (!(e.key in moves)) return;
+      e.preventDefault();
+      activateTab(tabs[(moves[e.key] + tabs.length) % tabs.length]);
     });
   });
 
-  // Copy Buttons
   document.querySelectorAll(".copy-btn").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      const targetId = e.currentTarget.getAttribute("data-target");
-      const codeElem = document.querySelector(`#${targetId}`);
-      if (codeElem) {
-        try {
-          await navigator.clipboard.writeText(codeElem.textContent || "");
-          const origText = e.currentTarget.textContent;
-          e.currentTarget.textContent = "✅ Copied!";
-          setTimeout(() => { e.currentTarget.textContent = origText; }, 2000);
-        } catch {
-          // Fallback selection
-          const range = document.createRange();
-          range.selectNode(codeElem);
-          window.getSelection()?.removeAllRanges();
-          window.getSelection()?.addRange(range);
-          alert("Text selected. Press Ctrl+C or Cmd+C to copy.");
-        }
+    btn.addEventListener("click", async () => {
+      const code = document.getElementById(btn.dataset.target);
+      if (!code) return;
+      try {
+        await navigator.clipboard.writeText(code.textContent || "");
+        btn.textContent = "Copied";
+        announce("Copied to clipboard.");
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
+        btn.textContent = "Selected — press Ctrl+C";
+        announce("Text selected. Press Control C or Command C to copy.");
       }
+      setTimeout(() => { btn.textContent = "Copy"; }, 2500);
     });
   });
 
-  // Download Buttons
   document.querySelectorAll(".download-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      const targetId = e.currentTarget.getAttribute("data-target");
-      const filename = e.currentTarget.getAttribute("data-filename") || "vocspace-artifact.txt";
-      const codeElem = document.querySelector(`#${targetId}`);
-      if (codeElem) {
-        const blob = new Blob([codeElem.textContent || ""], { type: "text/plain;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
+    btn.addEventListener("click", () => {
+      const code = document.getElementById(btn.dataset.target);
+      if (!code) return;
+      const blob = new Blob([code.textContent || ""], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = btn.dataset.filename || "vocspace-artifact.txt";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     });
   });
 }
 
-// Initial render
 render();
