@@ -36,7 +36,7 @@ Selected 2026-10-11. Research is in [DESIGN_RESEARCH.md](DESIGN_RESEARCH.md).
 
 ### Typography
 - Family: `"Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, "Segoe UI", sans-serif`. Mono: `"Atkinson Hyperlegible Mono", ui-monospace, Consolas, monospace`.
-- The fonts are not bundled yet; the stack falls back to the system UI font. To bundle, add the OFL font files under `assets/fonts/` and declare `@font-face`. A CDN is not used, to keep the zero-tracking claim true.
+- Atkinson Hyperlegible Next (400, 700, 800) is self-hosted from `assets/fonts/` under the SIL OFL; there are no CDN requests, so the zero-tracking claim holds. Atkinson Hyperlegible Mono is not bundled, so code blocks fall back to the system monospace.
 - Scale (rem, root 100%/118.75% in large-text mode): 0.8125 label · 1 body · 1.25 h3 · 1.75 h2 · clamp(2.25–4) display.
 - Labels: uppercase, 0.08em tracking, bold, used for station names and metadata only.
 

@@ -42,7 +42,7 @@ Not yet verified:
 - Windows High Contrast / `forced-colors` has rules but was not checked visually.
 - 200% and 400% browser zoom and reflow were not checked.
 - Safari and Firefox were not checked. `:has()` and `color-mix()` need current versions; older browsers lose only the selected-row tint and toggle inversion, and the checkbox state remains.
-- Atkinson Hyperlegible is not bundled, so the page currently renders in the system UI font. See DESIGN_DIRECTION.md.
+- Atkinson Hyperlegible Mono is not bundled; code blocks use the system monospace.
 
 ## Important limitations
 
