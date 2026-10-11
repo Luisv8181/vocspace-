@@ -7,199 +7,249 @@ export function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
-export function getTypeBadge(type = "option") {
-  const map = {
-    digital: { label: "Digital / Software", color: "badge-blue" },
-    environmental: { label: "Environmental", color: "badge-green" },
-    organizational: { label: "Process / Policy", color: "badge-purple" },
-    physical: { label: "Physical / Ergonomic", color: "badge-amber" },
-    "assistive-tech": { label: "Assistive Tech", color: "badge-teal" }
-  };
-  const badge = map[type.toLowerCase()] || { label: type, color: "badge-gray" };
-  return `<span class="badge ${badge.color}">${escapeHtml(badge.label)}</span>`;
+const MECHANISMS = {
+  digital: { label: "Digital / software", line: "digital" },
+  environmental: { label: "Environmental", line: "environmental" },
+  organizational: { label: "Process / policy", line: "organizational" },
+  physical: { label: "Physical / ergonomic", line: "physical" },
+  "assistive-tech": { label: "Assistive technology", line: "assistive" }
+};
+
+const EFFORT = {
+  low: { label: "Low effort", stops: 1 },
+  medium: { label: "Moderate effort", stops: 2 },
+  high: { label: "High / specialised", stops: 3 }
+};
+
+// Analyzer output and pattern data use kebab-case slugs; display them as words.
+function humanize(value = "") {
+  const text = String(value);
+  return /^[a-z0-9]+(-[a-z0-9]+)+$/.test(text) ? text.replaceAll("-", " ") : text;
 }
 
-export function getDifficultyBadge(difficulty = "medium") {
-  const map = {
-    low: { label: "Low Effort", color: "diff-low" },
-    medium: { label: "Moderate Effort", color: "diff-med" },
-    high: { label: "High / Specialized", color: "diff-high" }
-  };
-  const diff = map[difficulty.toLowerCase()] || { label: difficulty, color: "diff-med" };
-  return `<span class="diff-tag ${diff.color}">${escapeHtml(diff.label)}</span>`;
+export function getMechanism(type = "") {
+  return MECHANISMS[String(type).toLowerCase()] || { label: type || "Other", line: "other" };
+}
+
+export function caseCode(id = "") {
+  const match = String(id).match(/(\d+)$/);
+  return match ? match[1] : "—";
+}
+
+function renderEffort(difficulty = "medium") {
+  const effort = EFFORT[String(difficulty).toLowerCase()] || EFFORT.medium;
+  const stops = [1, 2, 3]
+    .map((n) => `<span class="stop ${n <= effort.stops ? "is-filled" : ""}"></span>`)
+    .join("");
+  return `<span class="effort"><span class="effort-stops" aria-hidden="true">${stops}</span>${escapeHtml(effort.label)}</span>`;
+}
+
+export function renderStationHeading({ number, label, id, title, desc = "" }) {
+  return `
+    <header class="station-head">
+      <span class="station-node" aria-hidden="true">${escapeHtml(number)}</span>
+      <p class="station-label">${escapeHtml(label)}</p>
+      <h2 id="${escapeHtml(id)}">${escapeHtml(title)}</h2>
+      ${desc ? `<p class="station-desc">${desc}</p>` : ""}
+    </header>
+  `;
 }
 
 export function renderOptions(options = [], selectedIds = []) {
   if (!options || options.length === 0) {
-    return `<p class="empty-state">No solution pathways generated yet. Select or describe a barrier above.</p>`;
+    return `<p class="empty-state">No options yet. Choose a case or describe a barrier at station 01.</p>`;
   }
 
-  return options.map((option) => {
-    const isChecked = selectedIds.includes(option.id) ? "checked" : "";
-    const evidenceList = (option.evidence && option.evidence.length > 0)
-      ? `<div class="card-evidence"><strong>Evidence & Standards:</strong> ${option.evidence.map((e) => `<span class="pill-mini">${escapeHtml(e)}</span>`).join(" ")}</div>`
+  return `<ol class="option-lines">${options.map((option, index) => {
+    const selected = selectedIds.includes(option.id);
+    const mech = getMechanism(option.type);
+    const titleId = `opt-title-${escapeHtml(option.id)}`;
+    const tradeoffs = (option.tradeoffs || []).length
+      ? `<div class="option-tradeoffs"><h4 class="mini-label">Trade-offs</h4><ul>${option.tradeoffs.map((t) => `<li>${escapeHtml(humanize(t))}</li>`).join("")}</ul></div>`
       : "";
-
-    const tradeoffsList = (option.tradeoffs && option.tradeoffs.length > 0)
-      ? `<div class="card-tradeoffs"><strong>Tradeoffs & Risks:</strong> <ul>${option.tradeoffs.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>`
+    const basis = (option.evidence || []).length
+      ? `<p class="footnote"><span class="mini-label">Basis</span> ${option.evidence.map(escapeHtml).join("; ")}</p>`
       : "";
 
     return `
-      <article class="solution-card ${isChecked ? 'is-selected' : ''}" id="card-${escapeHtml(option.id)}">
-        <div class="card-header">
-          ${getTypeBadge(option.type)}
-          ${getDifficultyBadge(option.implementationDifficulty)}
+      <li class="option-line line-${mech.line} ${selected ? "is-selected" : ""}" id="card-${escapeHtml(option.id)}">
+        <div class="option-meta">
+          <span class="option-code">${String(index + 1).padStart(2, "0")}</span>
+          <span class="mech-label">${escapeHtml(mech.label)}</span>
+          ${renderEffort(option.implementationDifficulty)}
         </div>
-        <h3 class="card-title">${escapeHtml(option.name)}</h3>
-        <p class="card-mechanism"><strong>Mechanism:</strong> ${escapeHtml(option.mechanism || "")}</p>
-        <p class="card-rationale"><strong>Why it helps:</strong> ${escapeHtml(option.rationale || "")}</p>
-        ${tradeoffsList}
-        ${evidenceList}
-        <label class="select-option-box">
-          <input type="checkbox" name="selectedSolution" value="${escapeHtml(option.id)}" ${isChecked}>
-          <span class="checkbox-label">Select this pathway for Action Plan & Compiler</span>
+        <h3 class="option-title" id="${titleId}">${escapeHtml(option.name)}</h3>
+        <p class="option-mechanism">${escapeHtml(option.mechanism || "")}</p>
+        ${option.rationale ? `<p class="option-rationale"><span class="mini-label">Why it helps</span> ${escapeHtml(option.rationale)}</p>` : ""}
+        ${tradeoffs}
+        ${basis}
+        <label class="route-toggle">
+          <input type="checkbox" name="selectedSolution" value="${escapeHtml(option.id)}" aria-describedby="${titleId}" ${selected ? "checked" : ""}>
+          <span>Add to route</span>
         </label>
-      </article>
+      </li>
     `;
-  }).join("");
+  }).join("")}</ol>`;
+}
+
+export function renderRouteSummary(model) {
+  const stops = [
+    ["Goal", model.participationGoal],
+    ["Task", model.task],
+    ["Context", model.context],
+    ["Barrier", model.barrier]
+  ];
+  return `
+    <ol class="route-summary">
+      ${stops.map(([label, value]) => `
+        <li class="summary-stop">
+          <span class="mini-label">${label}</span>
+          <span class="summary-text">${escapeHtml(value || "Not specified yet")}</span>
+        </li>
+      `).join("")}
+      <li class="summary-stop is-terminus">
+        <span class="mini-label">Functional need</span>
+        <span class="summary-need">${escapeHtml(model.functionalNeed || "Not specified yet")}</span>
+      </li>
+    </ol>
+    <dl class="summary-extras">
+      <div><dt class="mini-label">Strengths</dt><dd>${escapeHtml((model.strengths || []).join("; ") || "None listed")}</dd></div>
+      <div><dt class="mini-label">Constraints</dt><dd>${escapeHtml((model.constraints || []).join("; ") || "None listed")}</dd></div>
+    </dl>
+  `;
 }
 
 export function renderClarifyingQuestions(questions = []) {
   if (!questions || questions.length === 0) return "";
   return `
-    <div class="clarifying-box" role="region" aria-label="Clarifying Questions">
-      <div class="clarifying-header">
-        <span class="clarifying-icon" aria-hidden="true">💡</span>
-        <h4>Clarifying Questions to Sharpen Context</h4>
-      </div>
-      <p class="clarifying-desc">These targeted inquiry prompts help isolate the exact barrier mechanism from medical labels:</p>
-      <ul class="clarifying-list">
+    <section class="notice notice-questions" aria-labelledby="questions-title">
+      <h3 id="questions-title" class="notice-title">Questions that sharpen the route</h3>
+      <p>Ask these to pin down the barrier mechanism without relying on medical labels.</p>
+      <ol class="question-list">
         ${questions.map((q) => `<li>${escapeHtml(q)}</li>`).join("")}
-      </ul>
-    </div>
+      </ol>
+    </section>
   `;
 }
 
-export function renderCompiledArtifacts(artifacts, options = {}) {
+const ARTIFACT_TABS = [
+  {
+    key: "letter",
+    field: "requestLetter",
+    tab: "Request letter",
+    title: "Accommodation request letter",
+    desc: "Frames functional limitations without exposing diagnostic records. Review before sending; this is a draft, not legal advice.",
+    filename: "accommodation-request.txt"
+  },
+  {
+    key: "techspec",
+    field: "technicalSpec",
+    tab: "Technical spec",
+    title: "Technical specification and coding-agent prompt",
+    desc: "Paste into a coding agent or hand to an engineering team. States WCAG 2.2 acceptance criteria.",
+    filename: "technical-spec-prompt.md"
+  },
+  {
+    key: "checklist",
+    field: "implementationChecklist",
+    tab: "Checklist",
+    title: "Implementation and safety checklist",
+    desc: "Phased steps: interactive agreement, procurement, IT vetting, safety boundary review.",
+    filename: "implementation-checklist.md"
+  },
+  {
+    key: "outcome",
+    field: "outcomeProtocol",
+    tab: "Validation",
+    title: "Outcome validation protocol",
+    desc: "How to tell whether the route worked: task completion, fatigue, secondary barriers.",
+    filename: "outcome-validation-protocol.md"
+  }
+];
+
+export function renderCompiledArtifacts(artifacts, activeKey = "letter") {
   if (!artifacts) return "";
+  const active = ARTIFACT_TABS.some((t) => t.key === activeKey) ? activeKey : "letter";
 
   return `
-    <div class="compiler-workbench" id="compiler-workbench">
-      <div class="compiler-toolbar">
-        <div class="artifact-tabs" role="tablist" aria-label="Compiled Artifacts">
-          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-letter" id="tab-btn-letter">
-            ✉️ Accommodation Request Letter
+    <div class="document">
+      <div class="doc-tabs" role="tablist" aria-label="Compiled documents">
+        ${ARTIFACT_TABS.map((t, i) => `
+          <button type="button" class="tab-btn" role="tab" id="tab-btn-${t.key}" data-tab="${t.key}"
+            aria-controls="tab-${t.key}" aria-selected="${t.key === active}" tabindex="${t.key === active ? "0" : "-1"}">
+            <span class="tab-num" aria-hidden="true">${i + 1}</span>${t.tab}
           </button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-techspec" id="tab-btn-techspec">
-            💻 AI Coding Agent / Tech Spec
-          </button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-checklist" id="tab-btn-checklist">
-            📋 Implementation Checklist
-          </button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-outcome" id="tab-btn-outcome">
-            📊 Outcome & Validation Rubric
-          </button>
-        </div>
+        `).join("")}
       </div>
-
-      <!-- Tab 1: Request Letter -->
-      <div class="tab-panel active" id="tab-letter" role="tabpanel" aria-labelledby="tab-btn-letter">
-        <div class="tab-panel-header">
-          <div>
-            <h4>Formal Accommodation Request Letter</h4>
-            <p class="panel-subtitle">ADA Title I / JAN compliant language framing functional limitations without exposing private diagnostic records.</p>
+      ${ARTIFACT_TABS.map((t) => `
+        <div class="tab-panel" id="tab-${t.key}" role="tabpanel" aria-labelledby="tab-btn-${t.key}" tabindex="0" ${t.key === active ? "" : "hidden"}>
+          <div class="doc-head">
+            <div>
+              <h3 class="doc-title">${t.title}</h3>
+              <p class="doc-desc">${t.desc}</p>
+            </div>
+            <div class="doc-actions">
+              <button type="button" class="btn btn-quiet copy-btn" data-target="content-${t.key}">Copy</button>
+              <button type="button" class="btn btn-quiet download-btn" data-target="content-${t.key}" data-filename="${t.filename}">Download</button>
+            </div>
           </div>
-          <div class="action-buttons">
-            <button type="button" class="btn-secondary copy-btn" data-target="content-letter">📋 Copy Letter</button>
-            <button type="button" class="btn-secondary download-btn" data-target="content-letter" data-filename="accommodation-request.txt">💾 Download</button>
-          </div>
+          <pre class="doc-body"><code id="content-${t.key}">${escapeHtml(artifacts[t.field])}</code></pre>
         </div>
-        <pre class="artifact-pre"><code id="content-letter">${escapeHtml(artifacts.requestLetter)}</code></pre>
-      </div>
-
-      <!-- Tab 2: Technical Spec -->
-      <div class="tab-panel" id="tab-techspec" role="tabpanel" aria-labelledby="tab-btn-techspec" hidden>
-        <div class="tab-panel-header">
-          <div>
-            <h4>Technical Specification & AI Coding Agent Prompt</h4>
-            <p class="panel-subtitle">Ready to paste into Claude, GPT-4, Antigravity, or assign to software engineering teams. Enforces WCAG 2.2 AA/AAA.</p>
-          </div>
-          <div class="action-buttons">
-            <button type="button" class="btn-secondary copy-btn" data-target="content-techspec">📋 Copy Prompt</button>
-            <button type="button" class="btn-secondary download-btn" data-target="content-techspec" data-filename="technical-spec-prompt.md">💾 Download</button>
-          </div>
-        </div>
-        <pre class="artifact-pre"><code id="content-techspec">${escapeHtml(artifacts.technicalSpec)}</code></pre>
-      </div>
-
-      <!-- Tab 3: Implementation Checklist -->
-      <div class="tab-panel" id="tab-checklist" role="tabpanel" aria-labelledby="tab-btn-checklist" hidden>
-        <div class="tab-panel-header">
-          <div>
-            <h4>Workplace Implementation & Safety Checklist</h4>
-            <p class="panel-subtitle">Phased execution roadmap spanning interactive agreement, procurement, IT security vetting, and safety boundary review.</p>
-          </div>
-          <div class="action-buttons">
-            <button type="button" class="btn-secondary copy-btn" data-target="content-checklist">📋 Copy Checklist</button>
-            <button type="button" class="btn-secondary download-btn" data-target="content-checklist" data-filename="implementation-checklist.md">💾 Download</button>
-          </div>
-        </div>
-        <pre class="artifact-pre"><code id="content-checklist">${escapeHtml(artifacts.implementationChecklist)}</code></pre>
-      </div>
-
-      <!-- Tab 4: Outcome Protocol -->
-      <div class="tab-panel" id="tab-outcome" role="tabpanel" aria-labelledby="tab-btn-outcome" hidden>
-        <div class="tab-panel-header">
-          <div>
-            <h4>Longitudinal Outcome Validation Protocol</h4>
-            <p class="panel-subtitle">VocSpace outcome learning rubric measuring task completion rate, cognitive fatigue, and secondary barrier emergence.</p>
-          </div>
-          <div class="action-buttons">
-            <button type="button" class="btn-secondary copy-btn" data-target="content-outcome">📋 Copy Protocol</button>
-            <button type="button" class="btn-secondary download-btn" data-target="content-outcome" data-filename="outcome-validation-protocol.md">💾 Download</button>
-          </div>
-        </div>
-        <pre class="artifact-pre"><code id="content-outcome">${escapeHtml(artifacts.outcomeProtocol)}</code></pre>
-      </div>
+      `).join("")}
     </div>
   `;
 }
 
-export function renderResourceOptions(resources = []) {
-  return resources.map((resource) => `
-    <li class="resource-card">
-      <div class="resource-top">
-        <h4 class="resource-name">${escapeHtml(resource.name)}</h4>
-        ${resource.url ? `<a href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer" class="resource-link">Visit Resource ↗</a>` : ""}
+function renderResourceRow(resource) {
+  return `
+    <li class="directory-row">
+      <div class="directory-name">
+        <h4>${escapeHtml(resource.name)}</h4>
+        ${resource.url ? `<a href="${escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer">Visit<span class="visually-hidden"> ${escapeHtml(resource.name)} (opens in a new tab)</span> <span aria-hidden="true">↗</span></a>` : ""}
       </div>
-      <p class="resource-cap">${escapeHtml(resource.capability)}</p>
-      ${resource.evidenceNotes ? `<p class="resource-notes"><em>${escapeHtml(resource.evidenceNotes)}</em></p>` : ""}
-      <div class="resource-tags">
-        ${(resource.domains || []).map((dom) => `<span class="pill-mini">${escapeHtml(dom)}</span>`).join(" ")}
-      </div>
+      <p class="directory-cap">${escapeHtml(resource.capability)}</p>
+      ${resource.evidenceNotes ? `<p class="footnote">${escapeHtml(resource.evidenceNotes)}</p>` : ""}
+      <p class="tag-line">${(resource.domains || []).map(escapeHtml).join(" · ")}</p>
     </li>
-  `).join("");
+  `;
+}
+
+export function renderResourceOptions(resources = [], matchedIds = []) {
+  const matched = resources.filter((r) => matchedIds.includes(r.id));
+  const others = resources.filter((r) => !matchedIds.includes(r.id));
+  return `
+    ${matched.length ? `
+      <h3 class="group-label">On this route <span class="count">${matched.length}</span></h3>
+      <ul class="directory">${matched.map(renderResourceRow).join("")}</ul>
+    ` : ""}
+    <details class="more" ${matched.length ? "" : "open"}>
+      <summary>${matched.length ? "Other resources" : "All resources"} <span class="count">${others.length}</span></summary>
+      <ul class="directory">${others.map(renderResourceRow).join("")}</ul>
+    </details>
+  `;
 }
 
 export function renderPatterns(patterns = []) {
-  return patterns.map((pattern) => `
-    <article class="pattern-card">
-      <div class="pattern-header">
-        <span class="pattern-id">${escapeHtml(pattern.id)}</span>
-        <span class="pattern-status ${pattern.reviewStatus === 'source-reviewed' ? 'status-reviewed' : 'status-draft'}">${escapeHtml(pattern.reviewStatus)}</span>
-      </div>
-      <h3 class="pattern-title">${escapeHtml(pattern.title)}</h3>
-      <p><strong>Functional Need:</strong> ${escapeHtml(pattern.functionalNeed)}</p>
-      <p><strong>Mechanism:</strong> ${escapeHtml(pattern.mechanism)}</p>
-      <div class="pattern-approaches">
-        <strong>Approaches:</strong>
-        <div class="tag-row">${pattern.candidateApproaches.map((app) => `<span class="approach-tag">${escapeHtml(app)}</span>`).join(" ")}</div>
-      </div>
-      <div class="pattern-tradeoffs">
-        <strong>Tradeoffs:</strong>
-        <ul>${pattern.tradeoffs.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
-      </div>
-      ${pattern.safetyBoundary ? `<div class="safety-warning">⚠️ <strong>Safety Boundary:</strong> ${escapeHtml(pattern.safetyBoundary)}</div>` : ""}
-    </article>
-  `).join("");
+  return `<ul class="catalogue">${patterns.map((pattern) => {
+    const reviewed = pattern.reviewStatus === "source-reviewed";
+    return `
+      <li>
+        <details class="catalogue-row">
+          <summary>
+            <span class="pattern-code">${escapeHtml(pattern.id)}</span>
+            <span class="pattern-title">${escapeHtml(pattern.title)}</span>
+            <span class="stamp ${reviewed ? "stamp-reviewed" : "stamp-draft"}">${reviewed ? "Source-reviewed" : "Draft synthesis"}</span>
+          </summary>
+          <div class="pattern-body">
+            <p><span class="mini-label">Functional need</span> ${escapeHtml(pattern.functionalNeed)}</p>
+            <p><span class="mini-label">Mechanism</span> ${escapeHtml(pattern.mechanism)}</p>
+            <p><span class="mini-label">Approaches</span> ${pattern.candidateApproaches.map((a) => escapeHtml(humanize(a))).join(" · ")}</p>
+            <div><h4 class="mini-label">Trade-offs</h4><ul>${pattern.tradeoffs.map((t) => `<li>${escapeHtml(humanize(t))}</li>`).join("")}</ul></div>
+            ${pattern.safetyBoundary ? `<p class="notice notice-safety"><strong>Safety boundary.</strong> ${escapeHtml(pattern.safetyBoundary)}</p>` : ""}
+            ${pattern.provenance?.notes ? `<p class="footnote"><span class="mini-label">Provenance</span> ${escapeHtml(pattern.provenance.notes)}</p>` : ""}
+          </div>
+        </details>
+      </li>
+    `;
+  }).join("")}</ul>`;
 }
