@@ -1,10 +1,14 @@
 {
-  "name": "vocspace-v0.1-foundation",
+  "name": "vocspace",
   "private": true,
-  "version": "0.1.0",
-  "description": "Synthetic-case domain model and prototype scaffolding for VocSpace.",
+  "version": "0.2.0",
+  "description": "Accessibility and accommodation intelligence platform: Barrier -> Functional Need -> Options -> Solution -> Connection -> Implementation -> Validation.",
   "type": "module",
   "scripts": {
-    "validate": "node scripts/validate-domain.mjs"
+    "validate": "node scripts/validate-domain.mjs",
+    "test:engine": "node scripts/test-engine.mjs",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "test": "node scripts/validate-domain.mjs && node scripts/test-engine.mjs && node scripts/check-syntax.mjs",
+    "serve": "python -m http.server 8080"
   }
 }
