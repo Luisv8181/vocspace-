@@ -8,7 +8,7 @@ export const accommodationPatterns = [
     candidateApproaches: ["group-related-content", "progressive-disclosure", "user-controlled-reading-mode", "adjustable-text-density", "clear-navigation"],
     tradeoffs: ["over-simplification-can-hide-context", "implementation-may-affect-assistive-technology"],
     validationIdeas: ["task-completion", "navigation-errors", "time-on-task", "user-reported-effort"],
-    provenance: { classes: ["vocspace-synthesis"], sourceIds: [], notes: "Original VocSpace synthesis; not yet source-reviewed." },
+    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["JAN-ATTENTION-DISTRACTIONS"], notes: "Original VocSpace synthesis. JAN source is a relevant starting point; pattern-to-source claim mapping still requires human review." },
     reviewStatus: "draft"
   },
   {
@@ -20,7 +20,7 @@ export const accommodationPatterns = [
     candidateApproaches: ["persistent-next-action", "task-checkpoints", "interruption-notes", "save-and-resume", "team-interruption-conventions"],
     tradeoffs: ["tracking-may-add-work", "rigid-sequences-may-not-fit-changing-priorities"],
     validationIdeas: ["resumption-time", "missed-steps", "error-rate", "user-acceptability"],
-    provenance: { classes: ["vocspace-synthesis"], sourceIds: [], notes: "Original VocSpace synthesis; not yet source-reviewed." },
+    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["JAN-MONITORING"], notes: "Original VocSpace synthesis; the source is related to monitoring effectiveness, not proof that each candidate approach works." },
     reviewStatus: "draft"
   },
   {
@@ -32,7 +32,7 @@ export const accommodationPatterns = [
     candidateApproaches: ["meaningful-headings", "consistent-navigation", "progress-indicators", "explicit-errors", "keyboard-support", "screen-reader-structure"],
     tradeoffs: ["extra-indicators-may-add-clutter", "breadcrumbs-do-not-fix-poor-information-architecture"],
     validationIdeas: ["keyboard-testing", "screen-reader-testing", "task-success", "recovery-from-errors"],
-    provenance: { classes: ["vocspace-synthesis"], sourceIds: [], notes: "Original VocSpace synthesis; requires standards mapping and testing." },
+    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["JAN-EFFECTIVE-COMMUNICATION"], notes: "Original VocSpace synthesis. This JAN topic page is a discovery source only; digital accessibility claims need separate technical standards and tests." },
     reviewStatus: "draft"
   },
   {
@@ -44,7 +44,7 @@ export const accommodationPatterns = [
     candidateApproaches: ["commercial-adaptive-tool", "larger-handle", "textured-handle", "task-fixture", "reviewed-custom-adapter"],
     tradeoffs: ["larger-handles-may-not-fit-everyone", "added-material-can-change-balance", "custom-parts-can-create-hazards"],
     validationIdeas: ["fit", "control", "repeat-use", "failure-mode-review"],
-    provenance: { classes: ["vocspace-synthesis"], sourceIds: [], notes: "Concept only; not an engineering specification." },
+    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["JAN-GRIP-GRASP"], notes: "Concept only; JAN source is a starting point for idea discovery and does not validate this design or establish its safety." },
     reviewStatus: "draft",
     safetyBoundary: "No safety-critical, medical, mobility, load-bearing, or high-force use without qualified review."
   },
@@ -57,7 +57,7 @@ export const accommodationPatterns = [
     candidateApproaches: ["written-and-spoken-options", "captions-or-transcript", "plain-language-summary", "language-choice", "confirmation-of-key-information", "alternative-communication"],
     tradeoffs: ["automated-translation-can-lose-nuance", "captured-content-may-create-privacy-risk"],
     validationIdeas: ["user-confirmed-understanding", "correction-burden", "interaction-goal-achieved"],
-    provenance: { classes: ["vocspace-synthesis"], sourceIds: [], notes: "Original VocSpace synthesis; context-specific review required." },
+    provenance: { classes: ["vocspace-synthesis"], sourceIds: ["JAN-COMMUNICATION-PROCESS", "JAN-EFFECTIVE-COMMUNICATION"], notes: "Original VocSpace synthesis; context-specific review required before deployment." },
     reviewStatus: "draft"
   },
   {
