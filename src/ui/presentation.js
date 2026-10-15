@@ -1,4 +1,3 @@
-import { routeResources } from "../domain/solution-matcher.js";
 export function escapeHtml(value = "") {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -253,46 +252,4 @@ export function renderPatterns(patterns = []) {
       </li>
     `;
   }).join("")}</ul>`;
-}
-
-export function renderMatchedPatterns(matches = [], resources = [], sources = []) {
-  return matches.map(({ pattern, confidence, reasons, matchedTerms }) => {
-    const routed = routeResources(pattern, resources);
-    const sourceLabel = (pattern.provenance?.classes || []).map((item) => item.replaceAll("-", " ")).join(", ");
-    const linkedSources = (pattern.provenance?.sourceIds || [])
-      .map((sourceId) => sources.find((source) => source.id === sourceId))
-      .filter(Boolean);
-    return `
-      <article class="solution-card match-card">
-        <p class="eyebrow">${escapeHtml(pattern.id)} · ${escapeHtml(confidence)}</p>
-        <h3>${escapeHtml(pattern.title)}</h3>
-        <p>${escapeHtml(pattern.mechanism)}</p>
-        <p><strong>Functional need:</strong> ${escapeHtml(pattern.functionalNeed)}</p>
-        <p><strong>Why it surfaced:</strong> ${escapeHtml(reasons.join(" "))}</p>
-        <p><strong>Matched terms:</strong> ${escapeHtml(matchedTerms.join(", ") || "No direct term overlap")}</p>
-        <p><strong>Tradeoffs:</strong> ${escapeHtml(pattern.tradeoffs.join("; "))}</p>
-        <p><strong>Provenance:</strong> ${escapeHtml(sourceLabel || "unknown")} · <strong>Status:</strong> ${escapeHtml(pattern.reviewStatus)}</p>
-        <p><strong>Source discovery links:</strong> ${linkedSources.length ? linkedSources.map((source) => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a>`).join("; ") : "No source mapped"}.</p>
-        <p><strong>Source limitations:</strong> ${escapeHtml(linkedSources.map((source) => source.limitations.join("; ")).join(" | ") || "No source mapping is currently attached.")}</p>
-        <p><strong>Validation ideas:</strong> ${escapeHtml(pattern.validationIdeas.join("; "))}</p>
-        <p><strong>Resource pathways:</strong> ${escapeHtml(routed.map((resource) => resource.name).join(", ") || "Needs resource review")}</p>
-        <label class="select-option">
-          <input type="checkbox" name="selectedPattern" value="${escapeHtml(pattern.id)}">
-          Include this pattern in the draft plan
-        </label>
-      </article>
-    `;
-  }).join("");
-}
-
-export function renderSourceCatalog(sources = []) {
-  return sources.map((source) => `
-    <li>
-      <a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)} (opens source)</a>
-      <p><strong>Publisher:</strong> ${escapeHtml(source.publisher)} · <strong>Review:</strong> ${escapeHtml(source.reviewStatus)}</p>
-      <p><strong>May inform:</strong> ${escapeHtml(source.supports.join("; "))}</p>
-      <p><strong>Limitations:</strong> ${escapeHtml(source.limitations.join("; "))}</p>
-      <p class="muted">This is a source-discovery record, not a completed evidence review. Read the source directly before using it to support a specific claim.</p>
-    </li>
-  `).join("");
 }

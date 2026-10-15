@@ -3,14 +3,11 @@ import { accommodationPatterns } from "../data/accommodation-patterns.js";
 import { resourceCategories } from "../data/resources.js";
 import { analyzeBarrierInput } from "../domain/barrier-analyzer.js";
 import { compileSolutionArtifacts } from "../domain/solution-compiler.js";
-import { matchAccommodationPatterns, hasSufficientContext } from "../domain/solution-matcher.js";
-import { sourceCatalog } from "../data/source-catalog.js";
 import {
   escapeHtml,
   caseCode,
   renderStationHeading,
   renderOptions,
-  renderMatchedPatterns,
   renderRouteSummary,
   renderClarifyingQuestions,
   renderCompiledArtifacts,
@@ -116,17 +113,6 @@ function announce(message) {
 function selectionText() {
   const n = state.selectedSolutionIds.length;
   return n === 0 ? "No options on your route yet" : `${n} option${n === 1 ? "" : "s"} on your route`;
-}
-
-function renderRankedPatterns(model) {
-  if (!hasSufficientContext(model)) {
-    return '<p class="notice" role="status">More context needed for ranked matching. Describe the functional need or barrier and one more detail about the task or environment.</p>';
-  }
-  const matches = matchAccommodationPatterns(model, accommodationPatterns, { limit: 5 });
-  if (!matches.length) {
-    return '<p class="notice" role="status">No clear pattern match found. Add context, try different wording, or review the pattern library manually. Do not treat unrelated results as recommendations.</p>';
-  }
-  return renderMatchedPatterns(matches, resourceCategories, sourceCatalog);
 }
 
 function renderPrefGroup(label, name, current, choices) {
@@ -253,9 +239,6 @@ function render() {
             <li class="line-assistive">Assistive tech</li>
           </ul>
           ${renderOptions(solutions, state.selectedSolutionIds)}
-          <h3 id="ranked-patterns-heading">Ranked pattern matches</h3>
-          <p>Patterns are ranked using transparent keyword and context matching. These are candidate ideas, not probabilities or guaranteed recommendations. Matched terms and reasons are shown for each.</p>
-          <div id="matched-solutions" class="solution-grid">${renderRankedPatterns(model)}</div>
           <div class="route-bar">
             <p id="route-count">${selectionText()}</p>
             <button type="button" class="btn btn-primary" id="trigger-compile-btn" ${solutions.length === 0 ? "disabled" : ""}>Build the plan</button>
